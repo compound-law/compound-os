@@ -47,6 +47,7 @@ import { logger } from "../middleware/logger.js";
 import { forbidden, HttpError, unauthorized } from "../errors.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 import { shouldWakeAssigneeOnCheckout } from "./issues-checkout-wakeup.js";
+import { pushNotificationService } from "../services/push-notifications.js";
 import { isAllowedContentType, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
 import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
 
@@ -71,6 +72,7 @@ export function issueRoutes(
 ) {
   const router = Router();
   const svc = issueService(db);
+  const pushSvc = pushNotificationService(db);
   const access = accessService(db);
   const heartbeat = heartbeatService(db);
   const feedback = feedbackService(db);
@@ -1219,6 +1221,27 @@ export function issueRoutes(
         _previous: hasFieldChanges ? previous : undefined,
       },
     });
+
+    // Push notification on status change — only to relevant users
+    if (updateFields.status && updateFields.status !== existing.status && issue.identifier) {
+      const actorUserId = req.actor.type === "board" ? req.actor.userId : undefined;
+      const relevantUserIds = [
+        issue.createdByUserId,
+        issue.assigneeUserId,
+      ].filter((id): id is string => !!id && id !== actorUserId);
+
+      if (relevantUserIds.length > 0) {
+        pushSvc.notifyUsers(
+          relevantUserIds,
+          {
+            title: `${issue.identifier} — ${updateFields.status}`,
+            body: issue.title,
+            url: `/${issue.identifier.split("-")[0]}/issues/${issue.identifier}`,
+            icon: "/android-chrome-192x192.png",
+          },
+        ).catch((err) => logger.warn({ err }, "Failed to send push notification for issue status change"));
+      }
+    }
 
     if (issue.status === "done" && existing.status !== "done") {
       const tc = getTelemetryClient();

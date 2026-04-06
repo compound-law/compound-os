@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useLocation, useParams } from "@/lib/router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Layout } from "./components/Layout";
@@ -68,6 +69,15 @@ function BootstrapPendingPage({ hasActiveInvite = false }: { hasActiveInvite?: b
   );
 }
 
+function PushSubscriber({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    import("./lib/push-notifications.js").then(({ subscribeToPushNotifications }) => {
+      subscribeToPushNotifications().catch(() => {});
+    });
+  }, []);
+  return <>{children}</>;
+}
+
 function CloudAccessGate() {
   const location = useLocation();
   const healthQuery = useQuery({
@@ -114,7 +124,7 @@ function CloudAccessGate() {
     return <Navigate to={`/auth?next=${next}`} replace />;
   }
 
-  return <Outlet />;
+  return <PushSubscriber><Outlet /></PushSubscriber>;
 }
 
 function boardRoutes() {
