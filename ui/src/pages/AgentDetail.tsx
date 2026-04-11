@@ -45,6 +45,7 @@ import { cn } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs } from "@/components/ui/tabs";
+import { PluginSlotMount, usePluginSlots } from "@/plugins/slots";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Popover,
@@ -653,6 +654,24 @@ export function AgentDetail() {
     enabled: canFetchAgent,
   });
   const resolvedCompanyId = agent?.companyId ?? selectedCompanyId;
+
+  const { slots: agentPluginDetailSlots } = usePluginSlots({
+    slotTypes: ["detailTab"],
+    entityType: "agent",
+    companyId: resolvedCompanyId ?? undefined,
+    enabled: !!resolvedCompanyId,
+  });
+  const agentPluginTabItems = useMemo(
+    () =>
+      agentPluginDetailSlots.map((slot) => ({
+        value: `plugin:${slot.pluginKey}:${slot.id}`,
+        label: slot.displayName,
+        slot,
+      })),
+    [agentPluginDetailSlots],
+  );
+  const activeAgentPluginTab =
+    agentPluginTabItems.find((item) => item.value === (urlTab ?? "")) ?? null;
   const canonicalAgentRef = agent ? agentRouteRef(agent) : routeAgentRef;
   const agentLookupRef = agent?.id ?? routeAgentRef;
   const resolvedAgentId = agent?.id ?? null;
@@ -737,6 +756,9 @@ export function AgentDetail() {
       }
       return;
     }
+    // Plugin detail tab URLs look like `plugin:<pluginKey>:<slotId>` and
+    // should NOT be canonicalized to a built-in tab name.
+    const isPluginTabUrl = typeof urlTab === "string" && urlTab.startsWith("plugin:");
     const canonicalTab =
       activeView === "instructions"
         ? "instructions"
@@ -749,6 +771,12 @@ export function AgentDetail() {
               : activeView === "budget"
                 ? "budget"
               : "dashboard";
+    if (isPluginTabUrl) {
+      if (routeAgentRef !== canonicalAgentRef) {
+        navigate(`/agents/${canonicalAgentRef}/${urlTab}`, { replace: true });
+      }
+      return;
+    }
     if (routeAgentRef !== canonicalAgentRef || urlTab !== canonicalTab) {
       navigate(`/agents/${canonicalAgentRef}/${canonicalTab}`, { replace: true });
       return;
@@ -1000,7 +1028,7 @@ export function AgentDetail() {
 
       {!urlRunId && (
         <Tabs
-          value={activeView}
+          value={activeAgentPluginTab ? activeAgentPluginTab.value : activeView}
           onValueChange={(value) => navigate(`/agents/${canonicalAgentRef}/${value}`)}
         >
           <PageTabBar
@@ -1011,8 +1039,9 @@ export function AgentDetail() {
               { value: "configuration", label: "Configuration" },
               { value: "runs", label: "Runs" },
               { value: "budget", label: "Budget" },
+              ...agentPluginTabItems.map(({ value, label }) => ({ value, label })),
             ]}
-            value={activeView}
+            value={activeAgentPluginTab ? activeAgentPluginTab.value : activeView}
             onValueChange={(value) => navigate(`/agents/${canonicalAgentRef}/${value}`)}
           />
         </Tabs>
@@ -1082,7 +1111,7 @@ export function AgentDetail() {
       )}
 
       {/* View content */}
-      {activeView === "dashboard" && (
+      {!activeAgentPluginTab && activeView === "dashboard" && (
         <AgentOverview
           agent={agent}
           runs={heartbeats ?? []}
@@ -1093,7 +1122,7 @@ export function AgentDetail() {
         />
       )}
 
-      {activeView === "instructions" && (
+      {!activeAgentPluginTab && activeView === "instructions" && (
         <PromptsTab
           agent={agent}
           companyId={resolvedCompanyId ?? undefined}
@@ -1104,7 +1133,7 @@ export function AgentDetail() {
         />
       )}
 
-      {activeView === "configuration" && (
+      {!activeAgentPluginTab && activeView === "configuration" && (
         <AgentConfigurePage
           agent={agent}
           agentId={agent.id}
@@ -1117,14 +1146,14 @@ export function AgentDetail() {
         />
       )}
 
-      {activeView === "skills" && (
+      {!activeAgentPluginTab && activeView === "skills" && (
         <AgentSkillsTab
           agent={agent}
           companyId={resolvedCompanyId ?? undefined}
         />
       )}
 
-      {activeView === "runs" && (
+      {!activeAgentPluginTab && activeView === "runs" && (
         <RunsTab
           runs={heartbeats ?? []}
           companyId={resolvedCompanyId!}
@@ -1136,7 +1165,7 @@ export function AgentDetail() {
         />
       )}
 
-      {activeView === "budget" && resolvedCompanyId ? (
+      {!activeAgentPluginTab && activeView === "budget" && resolvedCompanyId ? (
         <div className="max-w-3xl">
           <BudgetPolicyCard
             summary={agentBudgetSummary}
@@ -1146,6 +1175,19 @@ export function AgentDetail() {
           />
         </div>
       ) : null}
+
+      {activeAgentPluginTab && resolvedCompanyId && (
+        <PluginSlotMount
+          slot={activeAgentPluginTab.slot}
+          context={{
+            companyId: resolvedCompanyId,
+            projectId: null,
+            entityId: agent.id,
+            entityType: "agent",
+          }}
+          missingBehavior="placeholder"
+        />
+      )}
     </div>
   );
 }
