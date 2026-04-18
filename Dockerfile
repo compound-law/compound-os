@@ -29,6 +29,7 @@ COPY packages/adapters/openclaw-gateway/package.json packages/adapters/openclaw-
 COPY packages/adapters/opencode-local/package.json packages/adapters/opencode-local/
 COPY packages/adapters/pi-local/package.json packages/adapters/pi-local/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
+COPY packages/plugins/create-paperclip-plugin/package.json packages/plugins/create-paperclip-plugin/
 COPY patches/ patches/
 
 RUN pnpm install --frozen-lockfile
@@ -47,12 +48,17 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 WORKDIR /app
 COPY --chown=node:node --from=build /app /app
-RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai \
+RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @googleworkspace/cli@latest \
   && apt-get update \
   && apt-get install -y --no-install-recommends openssh-client jq \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
+
+# Install gcloud CLI (required by gws auth setup)
+RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
+  && ln -sf /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud \
+  && ln -sf /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
