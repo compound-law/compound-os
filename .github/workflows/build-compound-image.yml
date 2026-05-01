@@ -1,0 +1,51 @@
+name: Build Compound Image
+
+on:
+  push:
+    branches:
+      - compound
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
+    concurrency:
+      group: build-compound-image-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: useblacksmith/setup-docker-builder@v1
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=compound-{{date 'YYYYMMDD-HHmmss'}}
+            type=sha,prefix=compound-
+
+      - name: Build and push
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
