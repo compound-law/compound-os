@@ -1005,7 +1005,7 @@ export function CommentThread({
                 <input
                   ref={attachInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  accept="image/*,application/pdf,.docx,.xlsx,.pptx,.doc,.xls,.ppt,text/*,application/json,.csv"
                   className="hidden"
                   onChange={handleAttachFile}
                 />
