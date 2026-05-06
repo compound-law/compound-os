@@ -16,6 +16,8 @@
 #       - opencode rtk.ts present      -> overwrite (RTK-owned file)
 #       - codex .codex/ present        -> leave alone, log a warning (TOML merge
 #                                         deferred to a future revision)
+#
+# Cursor is intentionally not seeded -- rtk no longer supports it.
 #   * Idempotent: re-running on an already-seeded volume is a no-op.
 #
 # Exit code is always 0 (failures are logged but non-fatal — the entrypoint
@@ -86,15 +88,6 @@ claude_dst="$HOME_DIR/.claude/settings.json"
 if [ -f "$claude_src" ]; then
     if ! seed_if_missing "$claude_src" "$claude_dst"; then
         merge_json_hooks "$claude_src" "$claude_dst"
-    fi
-fi
-
-# === Cursor ===
-cursor_src="$DEFAULTS_DIR/.cursor/hooks.json"
-cursor_dst="$HOME_DIR/.cursor/hooks.json"
-if [ -f "$cursor_src" ]; then
-    if ! seed_if_missing "$cursor_src" "$cursor_dst"; then
-        merge_json_hooks "$cursor_src" "$cursor_dst"
     fi
 fi
 

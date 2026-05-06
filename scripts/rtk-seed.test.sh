@@ -41,23 +41,13 @@ assert() {
 
 # Fake /opt/rtk-defaults
 DEFAULTS="$WORK/opt-rtk-defaults"
-mkdir -p "$DEFAULTS/.claude" "$DEFAULTS/.cursor" "$DEFAULTS/.config/opencode/plugins" "$DEFAULTS/.codex"
+mkdir -p "$DEFAULTS/.claude" "$DEFAULTS/.config/opencode/plugins" "$DEFAULTS/.codex"
 
 cat > "$DEFAULTS/.claude/settings.json" <<'EOF'
 {
   "hooks": {
     "PreToolUse": [
       { "matcher": "Bash", "hooks": [ { "type": "command", "command": "rtk hook claude" } ] }
-    ]
-  }
-}
-EOF
-
-cat > "$DEFAULTS/.cursor/hooks.json" <<'EOF'
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [ { "type": "command", "command": "rtk hook cursor" } ] }
     ]
   }
 }
@@ -88,7 +78,6 @@ H="$WORK/scenario1"
 mkdir -p "$H"
 run_seed "$H"
 assert "Claude settings.json copied" test -f "$H/.claude/settings.json"
-assert "Cursor hooks.json copied" test -f "$H/.cursor/hooks.json"
 assert "opencode rtk.ts copied" test -f "$H/.config/opencode/plugins/rtk.ts"
 assert "Codex config.toml copied" test -f "$H/.codex/config.toml"
 assert "Claude has RTK hook" has_rtk_hook "$H/.claude/settings.json"
@@ -138,7 +127,6 @@ H="$WORK/scenario4"
 mkdir -p "$H"
 PAPERCLIP_RTK_DISABLED=1 run_seed "$H"
 assert "no Claude settings seeded" sh -c "[ ! -f '$H/.claude/settings.json' ]"
-assert "no Cursor hooks seeded" sh -c "[ ! -f '$H/.cursor/hooks.json' ]"
 assert "no opencode plugin seeded" sh -c "[ ! -f '$H/.config/opencode/plugins/rtk.ts' ]"
 
 # === Scenario 5: existing Codex .codex/ left alone ===
