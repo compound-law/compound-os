@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+# Seed RTK hook configs into $HOME (best-effort; failures non-fatal).
+# Set PAPERCLIP_RTK_DISABLED=1 to skip.
+/usr/local/bin/rtk-seed.sh "${HOME:-/paperclip}" || echo "rtk-seed: failed (continuing)"
+
 # Capture runtime UID/GID from environment variables, defaulting to 1000
 PUID=${USER_UID:-1000}
 PGID=${USER_GID:-1000}
