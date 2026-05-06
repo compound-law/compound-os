@@ -41,6 +41,11 @@ echo "==> Verifying key binaries in image"
   python3 --version
   curl --version | head -1
   claude --version 2>/dev/null || echo "claude CLI not found (OK in minimal builds)"
+  rtk --version
+  test -f /usr/local/bin/rtk-seed.sh && echo "rtk-seed.sh present"
+  test -f /opt/rtk-defaults/.claude/settings.json && echo "rtk defaults baked"
+  jq -e ".hooks.PreToolUse | any((.hooks // []) | any(.command | tostring | startswith(\"rtk hook\")))" \
+    /opt/rtk-defaults/.claude/settings.json && echo "rtk hook in baseline"
 '
 
 echo "==> Verifying PID 1 is an init that reaps adopted orphans"

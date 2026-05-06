@@ -100,8 +100,25 @@ RUN echo "cli-tools-epoch: ${CLI_TOOLS_CACHE_EPOCH}" \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
-COPY scripts/docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Install gcloud CLI (required by gws auth setup)
+RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
+  && ln -sf /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud \
+  && ln -sf /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil
+
+# Install rtk binary for token-compression hooks (https://github.com/rtk-ai/rtk)
+ARG RTK_VERSION=v0.38.0
+RUN curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh \
+    | env RTK_VERSION="${RTK_VERSION}" RTK_INSTALL_DIR=/usr/local/bin sh \
+  && rtk --version
+
+# Bake RTK hook configs into a throwaway HOME so they survive the /paperclip volume mount.
+# rtk-seed.sh (called from entrypoint) merges these into $HOME on container boot.
+RUN mkdir -p /opt/rtk-defaults \
+  && HOME=/opt/rtk-defaults rtk init -g --opencode --codex --cursor \
+  && chown -R node:node /opt/rtk-defaults
+
+COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh
 
 COPY --chown=node:node --from=build /app /app
 
