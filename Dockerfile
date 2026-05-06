@@ -114,7 +114,8 @@ RUN curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/in
 # Bake RTK hook configs into a throwaway HOME so they survive the /paperclip volume mount.
 # rtk-seed.sh (called from entrypoint) merges these into $HOME on container boot.
 RUN mkdir -p /opt/rtk-defaults \
-  && HOME=/opt/rtk-defaults rtk init -g --opencode --codex \
+  && HOME=/opt/rtk-defaults rtk init -g --opencode \
+  && HOME=/opt/rtk-defaults rtk init -g --codex \
   && chown -R node:node /opt/rtk-defaults
 
 COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh /usr/local/bin/
