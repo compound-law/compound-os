@@ -878,7 +878,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     const clearSessionForMaxTurns = isClaudeMaxTurnsResult(parsed);
     const poisonedPreviousMessageId = isClaudePoisonedPreviousMessageIdError(parsed);
     const parsedIsError = asBoolean(parsed.is_error, false);
-    const failed = (proc.exitCode ?? 0) !== 0 || parsedIsError;
+    // Claude CLI 2.1.142+ sets is_error=true on runs that hit recoverable tool errors
+    // mid-conversation but finished successfully. subtype is the authoritative run-level
+    // outcome — treat subtype="success" as success regardless of is_error.
+    const parsedSubtype = asString(parsed.subtype, "").trim().toLowerCase();
+    const failed = (proc.exitCode ?? 0) !== 0 || (parsedIsError && parsedSubtype !== "success");
     // Validate-before-persist guard: never persist a sessionId whose transcript
     // is known-poisoned. The Claude CLI keeps an on-disk JSONL keyed by the
     // session id; if the last entry contains a non-`msg_`-prefixed
