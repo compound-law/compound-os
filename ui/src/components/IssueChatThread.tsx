@@ -4276,6 +4276,7 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
               <input
                 ref={attachInputRef}
                 type="file"
+                accept="image/*,application/pdf,.docx,.xlsx,.pptx,.doc,.xls,.ppt,text/*,application/json,.csv"
                 className="hidden"
                 onChange={handleAttachFile}
               />

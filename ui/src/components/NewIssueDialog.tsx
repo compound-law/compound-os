@@ -174,7 +174,7 @@ import {
   type IssueModelLane,
 } from "../lib/issue-assignee-overrides";
 
-const STAGED_FILE_ACCEPT = "image/*,application/pdf,text/plain,text/markdown,application/json,text/csv,text/html,.md,.markdown";
+const STAGED_FILE_ACCEPT = "image/*,application/pdf,text/plain,text/markdown,application/json,text/csv,text/html,.md,.markdown,.docx,.xlsx,.pptx,.doc,.xls,.ppt";
 
 const ISSUE_THINKING_EFFORT_OPTIONS = {
   claude_local: [
