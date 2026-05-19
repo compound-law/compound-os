@@ -68,8 +68,18 @@ RUN pnpm --filter @paperclipai/plugin-sdk build
 # end of its stage. Empty for local `docker build`, which then writes no stamp.
 ARG PAPERCLIP_BUILD_COMMIT=""
 ENV NODE_OPTIONS=--max-old-space-size=4096
+# Bake in-tree plugins so their dist/manifest.js exists in the image.
+# Without this, plugin install via UI/API succeeds (manifest readable from source)
+# but loader fails at activation with "no manifest found" since dist/ is empty.
+# Plugins are filtered together so they share an SDK-build invocation cache.
+RUN pnpm \
+    --filter @paperclipai/plugin-workspace-diff \
+    --filter @paperclipai/plugin-llm-wiki \
+    build
 RUN pnpm --filter @paperclipai/server build
 RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-workspace-diff/dist/manifest.js || (echo "ERROR: plugin-workspace-diff build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-llm-wiki/dist/manifest.js || (echo "ERROR: plugin-llm-wiki build output missing" && exit 1)
 RUN rm -rf packages/paperclip-runner/runner/target
 
 FROM base AS production
