@@ -50,8 +50,18 @@ COPY --from=deps /app /app
 COPY . .
 RUN pnpm --filter @paperclipai/ui build
 RUN pnpm --filter @paperclipai/plugin-sdk build
+# Bake in-tree plugins so their dist/manifest.js exists in the image.
+# Without this, plugin install via UI/API succeeds (manifest readable from source)
+# but loader fails at activation with "no manifest found" since dist/ is empty.
+# Plugins are filtered together so they share an SDK-build invocation cache.
+RUN pnpm \
+    --filter @paperclipai/plugin-workspace-diff \
+    --filter @paperclipai/plugin-llm-wiki \
+    build
 RUN pnpm --filter @paperclipai/server build
 RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-workspace-diff/dist/manifest.js || (echo "ERROR: plugin-workspace-diff build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-llm-wiki/dist/manifest.js || (echo "ERROR: plugin-llm-wiki build output missing" && exit 1)
 
 FROM base AS production
 ARG USER_UID=1000
