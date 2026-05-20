@@ -105,10 +105,17 @@ WORKDIR /app
 RUN echo "cli-tools-epoch: ${CLI_TOOLS_CACHE_EPOCH}" \
   && npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest @moonshot-ai/kimi-code@latest @googleworkspace/cli@latest \
   && apt-get update \
-  && apt-get install -y --no-install-recommends openssh-client jq \
+  && apt-get install -y --no-install-recommends openssh-client jq python3-httpx python3-reportlab \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
+
+# Bake the dataforseo-claude shared infra into a throwaway dir so it survives
+# the /paperclip volume mount. dataforseo-claude-seed.sh (called from entrypoint)
+# copies it into /paperclip/dataforseo-claude on container boot.
+RUN cp -R /app/skills/dataforseo-claude/seo /opt/dataforseo-claude-defaults \
+  && cp /app/skills/dataforseo-claude/requirements.txt /opt/dataforseo-claude-defaults/requirements.txt \
+  && chmod +x /opt/dataforseo-claude-defaults/scripts/*.py /opt/dataforseo-claude-defaults/scripts/preflight.sh
 
 # Install gcloud CLI (required by gws auth setup)
 RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
@@ -129,8 +136,8 @@ RUN mkdir -p /opt/rtk-defaults/.claude \
   && HOME=/opt/rtk-defaults rtk init -g --codex \
   && chown -R node:node /opt/rtk-defaults
 
-COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh
+COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-seed.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh
 
 COPY --chown=node:node --from=build /app /app
 
