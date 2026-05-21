@@ -5,6 +5,8 @@ Usage:
   serp_check.py rank --domain example.com --keywords kw1 kw2 ...
   serp_check.py serp --keyword "best running shoes" [--depth 100]
   serp_check.py featured --keyword "what is geo"   # featured snippet / AIO check
+  serp_check.py ai-mode --query "what is gdpr"     # Google AI Mode citation check
+  serp_check.py ai-mode --query "..." --target compound.law  # cited y/n for target
 
 Output: JSON to stdout.
 """
@@ -13,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
 from dataforseo_client import (
     DEFAULT_LANGUAGE,
@@ -82,6 +85,75 @@ def cmd_rank(args: argparse.Namespace) -> None:
     write_json({"domain": domain, "rankings": rankings}, args.out)
 
 
+def _ai_mode_payload(query: str, args: argparse.Namespace) -> dict:
+    payload: dict[str, Any] = {
+        "keyword": query,
+        "language_code": args.language,
+        "device": args.device,
+    }
+    # DataForSEO AI Mode accepts either location_code (preferred — numeric)
+    # or location_name. Pass location_code if it parses as an int.
+    loc = str(args.location).strip()
+    if loc.isdigit():
+        payload["location_code"] = int(loc)
+    else:
+        payload["location_name"] = loc
+    return payload
+
+
+def cmd_ai_mode(args: argparse.Namespace) -> None:
+    """Google AI Mode SERP — extract cited sources for an anchor question.
+
+    If --target is set, also report whether the target domain was cited and
+    at what position.
+    """
+    data = call(
+        "serp/google/ai_mode/live/advanced",
+        _ai_mode_payload(args.query, args),
+    )
+    result = first_result(data)
+    items = result.get("items") or []
+
+    # The AI Mode result has an ai_overview-style block with `references`
+    # (the cited URLs). Flatten to a flat citations list.
+    citations: list[dict[str, Any]] = []
+    for item in items:
+        refs = item.get("references") or []
+        for idx, ref in enumerate(refs, start=1):
+            citations.append({
+                "position": idx,
+                "type": ref.get("type"),
+                "title": ref.get("title"),
+                "domain": ref.get("domain"),
+                "url": ref.get("url"),
+            })
+
+    output: dict[str, Any] = {
+        "query": args.query,
+        "location": args.location,
+        "language": args.language,
+        "citations": citations,
+        "citation_count": len(citations),
+    }
+
+    if args.target:
+        target = normalize_domain(args.target)
+        cited_at = None
+        cited_url = None
+        for c in citations:
+            cd = normalize_domain(c.get("domain") or "")
+            if cd and (target in cd or cd.endswith(target)):
+                cited_at = c["position"]
+                cited_url = c["url"]
+                break
+        output["target"] = target
+        output["target_cited"] = cited_at is not None
+        output["target_position"] = cited_at
+        output["target_url"] = cited_url
+
+    write_json(output, args.out)
+
+
 def cmd_featured(args: argparse.Namespace) -> None:
     """Detect featured snippet, AI overview, PAA, and other SERP features."""
     data = call(
@@ -129,6 +201,18 @@ def main() -> None:
     p_feat = sub.add_parser("featured", help="SERP feature breakdown for a keyword.")
     p_feat.add_argument("--keyword", required=True)
     p_feat.set_defaults(func=cmd_featured)
+
+    p_ai = sub.add_parser(
+        "ai-mode",
+        help="Google AI Mode citations for an anchor question.",
+    )
+    p_ai.add_argument("--query", required=True, help="Anchor question to test.")
+    p_ai.add_argument(
+        "--target",
+        default=None,
+        help="Optional target domain — output target_cited y/n + position.",
+    )
+    p_ai.set_defaults(func=cmd_ai_mode)
 
     args = parser.parse_args()
     args.func(args)
