@@ -103,20 +103,44 @@ You maintain a personal lessons-learned doc at `$AGENT_HOME/lessons-learned.md`.
 ### Read pattern
 At the START of every heartbeat (after Step 1 identity check, before any cluster review work), read this file in full. Treat it as input to whatever cluster decision you are about to make.
 
-### Append pattern
-At the END of a significant task — one that closed with a clear empirical signal (win or loss) — append a one-paragraph entry using this format:
+### Append pattern (OM grammar — observational-memory style)
+At the END of a significant task — one that closed with a clear empirical signal (win or loss) — append an entry using this format:
 
 ```
-## YYYY-MM-DD — <one-line headline>
+- 🔴|🟡|🟢 (YYYY-MM-DD) <one-line headline> (meaning <referenced date> if different from observation date)
+  - Pattern: <what you did differently / what approach you took>
+  - Signal: <empirical outcome — link the issue identifier, cite the metric, name the evidence>
+  - Applies: <when this pattern applies; explicit non-applicability>
+  - Confidence: low (n=1) | medium (n=2-3) | high (n≥3)
+  - ✅ <only include when pattern has been validated repeatedly; omit while building confidence>
+```
 
-**Pattern:** <what you did differently / what approach you took>
-**Signal:** <empirical outcome that justifies this lesson — link to issue, cite the metric, name the evidence>
-**Applies to:** <when this pattern applies; when it does NOT>
-**Confidence:** low | medium | high  (low = single instance; high = ≥3 repeats)
+**Grammar rules** (borrowed from Mastra observational-memory):
+- **Priority emoji** at start: 🔴 high (changes how I'll work), 🟡 medium (worth knowing), 🟢 low (interesting, low confidence)
+- **(YYYY-MM-DD) at start** = date you observed/captured the signal. Always include.
+- **(meaning <referenced date>) at end** if the lesson references a different date than today — e.g., "(meaning verified 2026-05-21, 7d latency)" when capturing a 2026-05-14 cluster confirmed ranking 7 days later
+- **State changes are explicit** — write "Switched from 5-spoke to 3-spoke pillars because X" not "Use 3-spoke pillars." Preserves what was tried before.
+- **Preserve identifiers verbatim** — issue IDs (ENG-993), exact slug names (`compliance/eu-ai-act-procurement`), competitor names. Don't summarize away the specifics.
+- **✅ completion marker** only when the pattern is validated enough to apply by default — strong "don't re-examine this" signal
+
+### Example entries
+
+```
+- 🔴 (2026-05-21) 5-spoke compliance/ clusters reach pos 1-3 in 3 weeks (meaning shipped 2026-04-30, ranked 2026-05-21)
+  - Pattern: pillar + 5 spokes, all spokes link to pillar AND 2 peer spokes
+  - Signal: ENG-967 cluster — 5/6 pages ranked top 5 within 3 weeks for primary anchor queries
+  - Applies: compliance/ EN with regulatory deadline anchor; untested for tools/ or DE
+  - Confidence: low (n=1)
+
+- 🟡 (2026-05-21) Competitive Intel "new pillar" signal predicts winnable cluster ~60% of the time
+  - Pattern: when Competitive Intel flags Taylor Wessing pillar that ranks pos 4-10, opening a competing cluster within 2 weeks captures pos 5-15 within 8 weeks
+  - Signal: 3 of 5 such signals turned into ranking clusters (ENG-972, ENG-963, +1); 2 were noise
+  - Applies: corporate + employment law; less reliable in commercial-contracts (more saturated)
+  - Confidence: medium (n=5, 3 wins)
 ```
 
 ### What to capture for your role
-- Cluster taxonomy patterns: which pillar+spoke shapes ranked vs which didn't (e.g., "compliance/ clusters with 5+ spokes per pillar outperformed 2-spoke clusters by X weeks-to-rank")
+- Cluster taxonomy patterns: which pillar+spoke shapes ranked vs which didn't
 - Signal-to-action lessons: which Keyword Researcher / Competitive Intel signals reliably became winning clusters vs which were noise
 - Competitive timing: when entering a cluster after a competitor's pillar appeared, what delay produced the best ranking outcome
 - DE-vs-EN cluster patterns: which practice areas yielded faster ranking on which language first
