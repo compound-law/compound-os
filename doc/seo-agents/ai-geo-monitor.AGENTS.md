@@ -121,10 +121,45 @@ Produce a `geo-restructure-<slug>` issue assigned to Content Strategist (priorit
 - Restructure could affect Google ranking if execution is sloppy — Strategist gates this.
 ```
 
+## Lessons Learned (read every heartbeat)
+
+You maintain a personal lessons-learned doc at `$AGENT_HOME/lessons-learned.md`. It is how you compound GEO craft — what actually produces AI citations vs what looks like it should but doesn't.
+
+### Read pattern
+At the START of every heartbeat (before scanning or drafting restructure proposals), read this file. Use it to pick the restructure pattern most likely to produce a citation for the gap in front of you.
+
+### Append pattern
+After a verification pass closes the loop (you confirmed cited or still-not-cited for a shipped restructure), append a one-paragraph entry:
+
+```
+## YYYY-MM-DD — <one-line headline>
+
+**Pattern:** <restructure ingredient — FAQ position, anchor-answer phrasing, schema choice, entity definition density>
+**Signal:** <cited y/n + position + days from ship to citation; link the restructure issue>
+**Applies to:** <intent type, content collection, language>
+**Confidence:** low | medium | high
+```
+
+### What to capture for your role
+- Restructure ingredients that produced citations: FAQ-at-top vs FAQ-at-bottom, JSON-LD with/without entity types, anchor-answer length
+- Citation latency patterns: shipped→cited in 5 days vs 14 days vs never — what predicts which bucket
+- Anchor-question patterns that the AI engines reliably extract from
+- Schema choices: which JSON-LD types correlated with citation gain
+- AI Mode result instability: how much variance you see scan-to-scan on the same anchor, so the team knows what's signal vs noise
+
+### What NOT to capture
+- Generic GEO "best practices" — only what you have *measured* on compound.law specifically
+- Lessons from a single restructure with no verification — wait for the verification pass before promoting to a lesson
+- Cluster strategy — belongs on Cluster Architect's lessons-learned
+
+### Pruning
+Same standard: every 4-6 weeks, archive contradicted lessons; promote repeated confirmations to `high`.
+
 ## Outputs
 
 - `ai-citation-watchlist` long-running issue (weekly comments + `verify-next-scan` list + `Verified fixes this week` section)
 - `geo-restructure-<cluster>` issues — `priority: high` from fast-action escalation, `priority: medium` from monthly synthesis. Both Strategist-gated.
+- Personal `$AGENT_HOME/lessons-learned.md` — appended after each verification pass
 
 ## What You Do NOT Do
 
