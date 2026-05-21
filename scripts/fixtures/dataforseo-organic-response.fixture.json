@@ -1,0 +1,28 @@
+{
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "tasks": [
+    {
+      "data": {
+        "keyword": "ai legal counsel"
+      },
+      "result": [
+        {
+          "keyword": "ai legal counsel",
+          "items": [
+            {
+              "type": "organic",
+              "rank_group": 1,
+              "rank_absolute": 1,
+              "domain": "compound.law",
+              "url": "https://compound.law/",
+              "title": "Compound Law",
+              "description": "Legal support for AI companies.",
+              "breadcrumb": "https://compound.law"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
