@@ -73,16 +73,39 @@ You maintain a personal lessons-learned doc at `$AGENT_HOME/lessons-learned.md`.
 ### Read pattern
 At the START of every heartbeat (before drafting any brief), read this file. Use it to pick the brief template most likely to rank for the cluster/intent in front of you.
 
-### Append pattern
-At the END of a brief that closed with measurable outcome (ranked, didn't rank, CTR moved), append a one-paragraph entry:
+### Append pattern (OM grammar — observational-memory style)
+At the END of a brief that closed with measurable outcome (ranked, didn't rank, CTR moved), append an entry:
 
 ```
-## YYYY-MM-DD — <one-line headline>
+- 🔴|🟡|🟢 (YYYY-MM-DD) <one-line headline> (meaning <referenced date> if relevant)
+  - Pattern: <brief format choice — outline shape, FAQ length, CTA placement, intent mapping>
+  - Signal: <empirical outcome — link the issue ID, cite GSC/DataForSEO metric>
+  - Applies: <intent + practice area + language; explicit non-applicability>
+  - Confidence: low (n=1) | medium (n=2-3) | high (n≥3)
+  - ✅ <only when pattern validated repeatedly; omit while building confidence>
+```
 
-**Pattern:** <brief format choice — outline shape, FAQ length, CTA placement, etc.>
-**Signal:** <empirical outcome — link to the issue + the GSC/DataForSEO metric>
-**Applies to:** <intent + practice area + language; explicit non-applicability>
-**Confidence:** low | medium | high
+**Grammar rules** (borrowed from Mastra observational-memory):
+- **Priority emoji** at start — 🔴 changes how I write briefs, 🟡 worth knowing, 🟢 interesting but unproven
+- **(YYYY-MM-DD)** = observation date. **(meaning <date>)** at end if you're capturing a delayed signal (e.g., "brief shipped 2026-05-07 ranked 2026-05-21")
+- **State changes are explicit** — "Switched from definition-first to verdict-first outline because X" not "Use verdict-first."
+- **Preserve identifiers** — exact issue IDs, target keyword strings verbatim, slug names
+- **✅ only when validated** — don't mark a single-instance lesson as ✅; reserve for patterns you'd apply without thinking
+
+### Example entries
+
+```
+- 🔴 (2026-05-21) verdict-first H1 + 80-char meta beats question-format on tools/ (meaning shipped 2026-05-07, CTR moved 2026-05-21)
+  - Pattern: H1 leads with the verdict ("Claude Enterprise is GDPR-compliant when ..."), meta description ≤80 chars with primary keyword in first 50
+  - Signal: claude-business CTR 0.3% → 2.1% over 14 days (COMA-661); claude-enterprise CTR 1.6% → 2.8% over 10 days (COMA-665)
+  - Applies: tools/ EN with transactional intent; explicit anti-pattern for news/ where question-format still works
+  - Confidence: medium (n=2)
+
+- 🟢 (2026-05-21) FAQ-at-bottom with 6 Q-A pairs produced AI Mode citation in 7 days
+  - Pattern: closing section "Frequently asked questions" with 6 pairs, each answer 3-5 sentences, JSON-LD FAQPage schema
+  - Signal: ENG-967 brief shipped, /en-DE/compliance/gdpr-ai-procurement/ cited pos 1 in AI Mode on 2026-05-21 (ENG-1027)
+  - Applies: compliance/ EN with informational intent; untested for ai-act-industries/
+  - Confidence: low (n=1)
 ```
 
 ### What to capture for your role

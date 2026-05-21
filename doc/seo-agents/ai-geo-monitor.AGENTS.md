@@ -128,16 +128,39 @@ You maintain a personal lessons-learned doc at `$AGENT_HOME/lessons-learned.md`.
 ### Read pattern
 At the START of every heartbeat (before scanning or drafting restructure proposals), read this file. Use it to pick the restructure pattern most likely to produce a citation for the gap in front of you.
 
-### Append pattern
-After a verification pass closes the loop (you confirmed cited or still-not-cited for a shipped restructure), append a one-paragraph entry:
+### Append pattern (OM grammar — observational-memory style)
+After a verification pass closes the loop (you confirmed cited or still-not-cited for a shipped restructure), append an entry:
 
 ```
-## YYYY-MM-DD — <one-line headline>
+- 🔴|🟡|🟢 (YYYY-MM-DD) <one-line headline> (meaning shipped <date>, verified <date>, <N>d latency)
+  - Pattern: <restructure ingredient — FAQ position, anchor-answer phrasing, schema choice, entity definition density>
+  - Signal: cited y/n at pos <N>; <days from ship to citation>; link the restructure issue
+  - Applies: <intent type, content collection, language>
+  - Confidence: low (n=1) | medium (n=2-3) | high (n≥3)
+  - ✅ <only when pattern validated repeatedly>
+```
 
-**Pattern:** <restructure ingredient — FAQ position, anchor-answer phrasing, schema choice, entity definition density>
-**Signal:** <cited y/n + position + days from ship to citation; link the restructure issue>
-**Applies to:** <intent type, content collection, language>
-**Confidence:** low | medium | high
+**Grammar rules** (from Mastra observational-memory):
+- **Priority emoji** — 🔴 changes how I'll propose restructures, 🟡 worth knowing, 🟢 interesting noise
+- **Two dates** are critical for your role specifically: observation date (today) + (meaning shipped X, verified Y, Nd latency). Citation latency is your primary KPI — always include it.
+- **State changes explicit** — "Switched from 5 FAQ pairs to 8 because X" not "Use 8 FAQ pairs"
+- **Preserve identifiers verbatim** — exact anchor query strings, JSON-LD schema types used, restructure issue IDs
+- **Verbatim AI Mode citation extracts** when capturing what got cited — the extracted phrasing IS the signal
+
+### Example entries
+
+```
+- 🔴 (2026-05-21) FAQ-at-bottom + JSON-LD FAQPage produced AI Mode citation pos 1 (meaning shipped 2026-05-14, verified 2026-05-21, 7d latency)
+  - Pattern: closing section "Frequently asked questions" with 5 Q-A pairs, each A is 3-4 sentences, JSON-LD FAQPage block immediately after the section
+  - Signal: /en-DE/compliance/gdpr-ai-procurement/ cited pos 1 in AI Mode for "What are EU AI Act procurement requirements for German enterprises?" extract begins "A compliant process usually includes six steps..." (ENG-1027 verification)
+  - Applies: compliance/ EN with anchor questions that have an enumerable answer; less suited for definitional anchors
+  - Confidence: low (n=1)
+
+- 🟡 (2026-05-21) AI Mode results vary ~30% scan-to-scan on same anchor (meaning noise observation, not actionable yet)
+  - Pattern: same anchor query rerun 3 hours apart returned different cited sources
+  - Signal: 2026-05-21 morning scan showed 1/10 citation, afternoon rerun showed 4/10 — same queries, same agent
+  - Applies: AI Mode in general; suggests verification needs minimum N=3 scans before treating "still not cited" as definitive
+  - Confidence: low (n=1, but worth investigating)
 ```
 
 ### What to capture for your role

@@ -67,16 +67,40 @@ You maintain a personal lessons-learned doc at `$AGENT_HOME/lessons-learned.md`.
 ### Read pattern
 At the START of every heartbeat (before drafting refresh briefs), read this file. Use it to pick the refresh template most likely to recover ranking for the decay type in front of you.
 
-### Append pattern
-After a refresh shipped and SEO Analyst's next weekly report tells you whether ranking recovered, append:
+### Append pattern (OM grammar — observational-memory style)
+After a refresh shipped and SEO Analyst's next weekly report tells you whether ranking recovered, append an entry:
 
 ```
-## YYYY-MM-DD — <one-line headline>
+- 🔴|🟡|🟢 (YYYY-MM-DD) <one-line headline> (meaning shipped <date>, verified <date>, <recovery|no-recovery>)
+  - Pattern: <decay type + intervention chosen — what you flagged + what the Writer changed>
+  - Signal: <ranking delta + WoW change after refresh shipped; link refresh issue + Analyst report>
+  - Applies: <content collection (news/compliance/tools/ai-act-industries) + decay type>
+  - Confidence: low (n=1) | medium (n=2-3) | high (n≥3)
+  - ✅ <only when pattern validated repeatedly>
+```
 
-**Pattern:** <decay type + intervention chosen — what you flagged + what the Writer changed>
-**Signal:** <ranking delta + WoW change after refresh shipped; link the refresh issue + Analyst's verifying report>
-**Applies to:** <content collection (news/compliance/tools/ai-act-industries) + decay type>
-**Confidence:** low | medium | high
+**Grammar rules** (from Mastra observational-memory):
+- **Priority emoji** — 🔴 changes how I propose refreshes, 🟡 worth knowing, 🟢 interesting but noisy
+- **Three dates** matter for your role: observation date, shipped date, recovery-verified date. The latency between ship and recovery (or no-recovery) is your primary signal.
+- **State changes explicit** — "Switched from full-rewrite to stats-only refresh because X" not "Use stats-only"
+- **Preserve identifiers** — exact slug, decay magnitude (e.g., "dropped from #4 to #14"), refresh issue ID, intervention specifics (which sections changed, what statistics)
+- **NO-RECOVERY lessons are your most valuable** — capture them at 🔴 priority. Knowing what doesn't work for which decay type prevents wasted Writer cycles.
+- **✅ only for repeated validation** — single-instance recoveries are too noisy
+
+### Example entries
+
+```
+- 🔴 (2026-05-21) Stats-refresh alone doesn't recover position drops on tools/ pages (meaning shipped 2026-05-01, verified 2026-05-21, no recovery)
+  - Pattern: flagged /en-DE/tools/claude-business/ at #4→#14 drop over 3 weeks; Writer updated 2026 statistics in section 2 only; no other changes
+  - Signal: rank still #13 after 20 days post-ship (Analyst weekly 2026-05-19); no Google reindex bump
+  - Applies: tools/ EN; suggests position drops here need anchor-answer + meta refresh, not stat refresh alone
+  - Confidence: low (n=1, but matches Engineer's hypothesis from COMA-442)
+
+- 🟡 (2026-05-21) CTR drops respond to meta-only refreshes within 7 days
+  - Pattern: when CTR drops >2% WoW but position stable, refresh meta title + description only; no body changes
+  - Signal: /en-DE/tools/elevenlabs/ CTR 0.3% → 1.8% within 8 days post-meta-rewrite (COMA-701 → verified ENG-959 weekly)
+  - Applies: tools/ pages with stable rank pos 5-15; less reliable for pos 1-3 (already optimized)
+  - Confidence: low (n=1)
 ```
 
 ### What to capture for your role
