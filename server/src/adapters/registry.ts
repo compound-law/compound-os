@@ -30,6 +30,9 @@ import {
   testEnvironment as claudeTestEnvironment,
   sessionCodec as claudeSessionCodec,
   getQuotaWindows as claudeGetQuotaWindows,
+  buildShannonSandboxEnsureInstallCommand,
+  resolveClaudeExecutionLauncher,
+  resolveShannonClaudeCommand,
 } from "@paperclipai/adapter-claude-local/server";
 import {
   agentConfigurationDoc as claudeAgentConfigurationDoc,
@@ -174,6 +177,24 @@ function buildNpmRuntimeCommandSpec(
   };
 }
 
+function buildClaudeRuntimeCommandSpec(config: Record<string, unknown>): AdapterRuntimeCommandSpec {
+  if (resolveClaudeExecutionLauncher(config) !== "shannon") {
+    return buildNpmRuntimeCommandSpec(config, "claude", "@anthropic-ai/claude-code");
+  }
+  const command = readConfiguredCommand(config, "shannon");
+  const canSelfInstall = !hasPathSeparator(command) && command === "shannon";
+  return {
+    command,
+    detectCommand: null,
+    installCommand: canSelfInstall
+      ? buildShannonSandboxEnsureInstallCommand({
+          shannonCommand: command,
+          claudeCommand: resolveShannonClaudeCommand(config) || "claude",
+        })
+      : null,
+  };
+}
+
 function buildCursorRuntimeCommandSpec(config: Record<string, unknown>): AdapterRuntimeCommandSpec {
   const command = readConfiguredCommand(config, "agent");
   return {
@@ -262,8 +283,7 @@ const claudeLocalAdapter: ServerAdapterModule = {
   supportsInstructionsBundle: true,
   instructionsPathKey: "instructionsFilePath",
   requiresMaterializedRuntimeSkills: false,
-  getRuntimeCommandSpec: (config) =>
-    buildNpmRuntimeCommandSpec(config, "claude", "@anthropic-ai/claude-code"),
+  getRuntimeCommandSpec: buildClaudeRuntimeCommandSpec,
   agentConfigurationDoc: claudeAgentConfigurationDoc,
   getQuotaWindows: claudeGetQuotaWindows,
 };

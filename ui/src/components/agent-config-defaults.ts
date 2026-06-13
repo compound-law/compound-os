@@ -12,6 +12,7 @@ export const defaultCreateValues: CreateConfigValues = {
   search: false,
   fastMode: false,
   dangerouslyBypassSandbox: false,
+  executionLauncher: "claude",
   command: "",
   args: "",
   extraArgs: "",

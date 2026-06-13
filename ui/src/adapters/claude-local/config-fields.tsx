@@ -78,8 +78,41 @@ export function ClaudeLocalAdvancedFields({
   eff,
   mark,
 }: AdapterConfigFieldsProps) {
+  const launcherValue = isCreate
+    ? values!.executionLauncher ?? "claude"
+    : eff("adapterConfig", "executionLauncher", String(config.executionLauncher ?? "claude"));
+  const setLauncher = (launcher: "claude" | "shannon") => {
+    if (isCreate) {
+      set!({ executionLauncher: launcher });
+      return;
+    }
+    mark("adapterConfig", "executionLauncher", launcher === "claude" ? undefined : launcher);
+  };
+
   return (
     <>
+      <Field label="Launcher" hint={help.executionLauncher}>
+        <div className="grid grid-cols-2 rounded-md border border-border bg-muted/20 p-0.5">
+          {(["claude", "shannon"] as const).map((launcher) => {
+            const active = launcherValue === launcher;
+            return (
+              <button
+                key={launcher}
+                type="button"
+                className={[
+                  "h-7 rounded px-2 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+                onClick={() => setLauncher(launcher)}
+              >
+                {launcher === "claude" ? "Claude" : "Shannon"}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
       <ToggleField
         label="Enable Chrome"
         hint={help.chrome}

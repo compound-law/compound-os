@@ -24,6 +24,13 @@ import { detectClaudeLoginRequired, parseClaudeStreamJson } from "./parse.js";
 import { isBedrockModelId } from "./models.js";
 import { buildClaudeProbePermissionArgs } from "./permissions.js";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
+import {
+  buildShannonSandboxEnsureInstallCommand,
+  DEFAULT_SHANNON_CLAUDE_COMMAND,
+  resolveClaudeExecutionLauncher,
+  resolveClaudeLauncherCommand,
+  resolveShannonClaudeCommand,
+} from "./launcher.js";
 
 function summarizeStatus(checks: AdapterEnvironmentCheck[]): AdapterEnvironmentTestResult["status"] {
   if (checks.some((check) => check.level === "error")) return "fail";
@@ -62,7 +69,8 @@ export async function testEnvironment(
 ): Promise<AdapterEnvironmentTestResult> {
   const checks: AdapterEnvironmentCheck[] = [];
   const config = parseObject(ctx.config);
-  const command = asString(config.command, "claude");
+  const executionLauncher = resolveClaudeExecutionLauncher(config);
+  const command = resolveClaudeLauncherCommand(config, executionLauncher);
   const target = ctx.executionTarget ?? null;
   const targetIsRemote = target?.kind === "remote";
   const targetIsSandbox = target?.kind === "remote" && target.transport === "sandbox";
@@ -109,26 +117,84 @@ export async function testEnvironment(
   const installCheck = await maybeRunSandboxInstallCommand({
     runId,
     target,
-    adapterKey: "claude",
-    installCommand: SANDBOX_INSTALL_COMMAND,
-    detectCommand: command,
+    adapterKey: executionLauncher === "shannon" ? "shannon" : "claude",
+    installCommand: executionLauncher === "shannon"
+      ? buildShannonSandboxEnsureInstallCommand({
+          shannonCommand: command,
+          claudeCommand: resolveShannonClaudeCommand(config) || DEFAULT_SHANNON_CLAUDE_COMMAND,
+        })
+      : SANDBOX_INSTALL_COMMAND,
+    detectCommand: executionLauncher === "shannon" ? null : command,
     env,
   });
   if (installCheck) checks.push(installCheck);
   try {
     await ensureAdapterExecutionTargetCommandResolvable(command, target, cwd, runtimeEnv);
     checks.push({
-      code: "claude_command_resolvable",
+      code: executionLauncher === "shannon" ? "shannon_command_resolvable" : "claude_command_resolvable",
       level: "info",
       message: `Command is executable: ${command}`,
     });
   } catch (err) {
     checks.push({
-      code: "claude_command_unresolvable",
+      code: executionLauncher === "shannon" ? "shannon_command_unresolvable" : "claude_command_unresolvable",
       level: "error",
       message: err instanceof Error ? err.message : "Command is not executable",
       detail: command,
     });
+  }
+
+  if (executionLauncher === "shannon") {
+    const shannonClaudeCommand =
+      resolveShannonClaudeCommand(config) || DEFAULT_SHANNON_CLAUDE_COMMAND;
+    for (const dependency of [
+      {
+        command: "bun",
+        okCode: "shannon_bun_resolvable",
+        errCode: "shannon_bun_unresolvable",
+        okMessage: "Bun is executable for Shannon.",
+        errMessage: "Bun is required by the Shannon CLI but is not executable.",
+        hint: "Install Bun (https://bun.sh) in this environment, then retry the probe.",
+      },
+      {
+        command: "tmux",
+        okCode: "shannon_tmux_resolvable",
+        errCode: "shannon_tmux_unresolvable",
+        okMessage: "tmux is executable for Shannon.",
+        errMessage: "tmux is required by Shannon but is not executable.",
+        hint: "Install tmux in this environment, then retry the probe.",
+      },
+      {
+        command: shannonClaudeCommand,
+        okCode: "shannon_claude_command_resolvable",
+        errCode: "shannon_claude_command_unresolvable",
+        okMessage: `Claude executable for Shannon is available: ${shannonClaudeCommand}`,
+        errMessage: "Claude Code is required by Shannon but is not executable.",
+        hint: "Install Claude Code, run `claude login`, and make sure the executable is on PATH or set shannonClaudeCommand.",
+      },
+    ]) {
+      try {
+        await ensureAdapterExecutionTargetCommandResolvable(
+          dependency.command,
+          target,
+          cwd,
+          runtimeEnv,
+        );
+        checks.push({
+          code: dependency.okCode,
+          level: "info",
+          message: dependency.okMessage,
+        });
+      } catch (err) {
+        checks.push({
+          code: dependency.errCode,
+          level: "error",
+          message: dependency.errMessage,
+          detail: err instanceof Error ? err.message : dependency.command,
+          hint: dependency.hint,
+        });
+      }
+    }
   }
 
   // When probing a remote target, the Paperclip host's process.env does not
@@ -178,10 +244,17 @@ export async function testEnvironment(
     });
   }
 
-  const canRunProbe =
-    checks.every((check) => check.code !== "claude_cwd_invalid" && check.code !== "claude_command_unresolvable");
+  const canRunProbe = checks.every((check) => check.level !== "error");
   if (canRunProbe) {
-    if (!commandLooksLike(command, "claude")) {
+    if (executionLauncher === "shannon" && !commandLooksLike(command, "shannon")) {
+      checks.push({
+        code: "shannon_hello_probe_skipped_custom_command",
+        level: "info",
+        message: "Skipped Shannon hello probe because command is not `shannon`.",
+        detail: command,
+        hint: "Use the `shannon` CLI command to run the automatic Shannon setup probe.",
+      });
+    } else if (executionLauncher === "claude" && !commandLooksLike(command, "claude")) {
       checks.push({
         code: "claude_hello_probe_skipped_custom_command",
         level: "info",
@@ -201,7 +274,9 @@ export async function testEnvironment(
         return asStringArray(config.args);
       })();
 
-      const args = ["--print", "-", "--output-format", "stream-json", "--verbose"];
+      const args = executionLauncher === "shannon"
+        ? ["-p", "Respond with hello.", "--output-format", "stream-json", "--verbose"]
+        : ["--print", "-", "--output-format", "stream-json", "--verbose"];
       args.push(...buildClaudeProbePermissionArgs({ dangerouslySkipPermissions, targetIsSandbox }));
       if (chrome) args.push("--chrome");
       // For Bedrock: only pass --model when the ID is a Bedrock-native identifier.
@@ -209,7 +284,13 @@ export async function testEnvironment(
         args.push("--model", model);
       }
       if (effort) args.push("--effort", effort);
-      if (maxTurns > 0) args.push("--max-turns", String(maxTurns));
+      if (executionLauncher === "claude" && maxTurns > 0) args.push("--max-turns", String(maxTurns));
+      if (executionLauncher === "shannon") {
+        const shannonClaudeCommand = resolveShannonClaudeCommand(config);
+        if (shannonClaudeCommand) {
+          args.push("--path-to-claude-code-executable", shannonClaudeCommand);
+        }
+      }
       if (extraArgs.length > 0) args.push(...extraArgs);
 
       // Sandbox bridges still add lease warmup and transport overhead, but
@@ -230,7 +311,7 @@ export async function testEnvironment(
           env,
           timeoutSec: helloProbeTimeoutSec,
           graceSec: 5,
-          stdin: "Respond with hello.",
+          stdin: executionLauncher === "shannon" ? undefined : "Respond with hello.",
           onLog: async () => {},
         },
       );
@@ -246,16 +327,18 @@ export async function testEnvironment(
 
       if (probe.timedOut) {
         checks.push({
-          code: "claude_hello_probe_timed_out",
+          code: executionLauncher === "shannon" ? "shannon_hello_probe_timed_out" : "claude_hello_probe_timed_out",
           level: "warn",
-          message: "Claude hello probe timed out.",
-          hint: "Retry the probe. If this persists, verify Claude can run `Respond with hello` from this directory manually.",
+          message: `${executionLauncher === "shannon" ? "Shannon" : "Claude"} hello probe timed out.`,
+          hint: executionLauncher === "shannon"
+            ? "Retry the probe. If this persists, verify `shannon -p \"Respond with hello.\" --output-format stream-json --verbose` works from this directory manually."
+            : "Retry the probe. If this persists, verify Claude can run `Respond with hello` from this directory manually.",
         });
       } else if (loginMeta.requiresLogin) {
         checks.push({
-          code: "claude_hello_probe_auth_required",
+          code: executionLauncher === "shannon" ? "shannon_hello_probe_auth_required" : "claude_hello_probe_auth_required",
           level: "warn",
-          message: "Claude CLI is installed, but login is required.",
+          message: `${executionLauncher === "shannon" ? "Shannon launched Claude" : "Claude CLI is installed"}, but login is required.`,
           ...(detail ? { detail } : {}),
           hint: loginMeta.loginUrl
             ? `Run \`claude login\` and complete sign-in at ${loginMeta.loginUrl}, then retry.`
@@ -265,25 +348,31 @@ export async function testEnvironment(
         const summary = parsedStream.summary.trim();
         const hasHello = /\bhello\b/i.test(summary);
         checks.push({
-          code: hasHello ? "claude_hello_probe_passed" : "claude_hello_probe_unexpected_output",
+          code: hasHello
+            ? executionLauncher === "shannon" ? "shannon_hello_probe_passed" : "claude_hello_probe_passed"
+            : executionLauncher === "shannon" ? "shannon_hello_probe_unexpected_output" : "claude_hello_probe_unexpected_output",
           level: hasHello ? "info" : "warn",
           message: hasHello
-            ? "Claude hello probe succeeded."
-            : "Claude probe ran but did not return `hello` as expected.",
+            ? `${executionLauncher === "shannon" ? "Shannon" : "Claude"} hello probe succeeded.`
+            : `${executionLauncher === "shannon" ? "Shannon" : "Claude"} probe ran but did not return \`hello\` as expected.`,
           ...(summary ? { detail: summary.replace(/\s+/g, " ").trim().slice(0, 240) } : {}),
           ...(hasHello
             ? {}
             : {
-                hint: "Try the probe manually (`claude --print - --output-format stream-json --verbose`) and prompt `Respond with hello`.",
+                hint: executionLauncher === "shannon"
+                  ? "Try the probe manually (`shannon -p \"Respond with hello.\" --output-format stream-json --verbose`)."
+                  : "Try the probe manually (`claude --print - --output-format stream-json --verbose`) and prompt `Respond with hello`.",
               }),
         });
       } else {
         checks.push({
-          code: "claude_hello_probe_failed",
+          code: executionLauncher === "shannon" ? "shannon_hello_probe_failed" : "claude_hello_probe_failed",
           level: "error",
-          message: "Claude hello probe failed.",
+          message: `${executionLauncher === "shannon" ? "Shannon" : "Claude"} hello probe failed.`,
           ...(detail ? { detail } : {}),
-          hint: "Run `claude --print - --output-format stream-json --verbose` manually in this directory and prompt `Respond with hello` to debug.",
+          hint: executionLauncher === "shannon"
+            ? "Run `shannon -p \"Respond with hello.\" --output-format stream-json --verbose` manually in this directory to debug."
+            : "Run `claude --print - --output-format stream-json --verbose` manually in this directory and prompt `Respond with hello` to debug.",
         });
       }
     }

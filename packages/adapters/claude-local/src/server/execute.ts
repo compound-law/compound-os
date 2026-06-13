@@ -63,6 +63,15 @@ import { isBedrockModelId } from "./models.js";
 import { prepareClaudePromptBundle } from "./prompt-cache.js";
 import { buildClaudeExecutionPermissionArgs } from "./permissions.js";
 import { SANDBOX_INSTALL_COMMAND } from "../index.js";
+import {
+  buildShannonSandboxEnsureInstallCommand,
+  buildShannonSandboxInstallCommand,
+  DEFAULT_SHANNON_CLAUDE_COMMAND,
+  resolveClaudeExecutionLauncher,
+  resolveClaudeLauncherCommand,
+  resolveShannonClaudeCommand,
+  type ClaudeExecutionLauncher,
+} from "./launcher.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +87,7 @@ interface ClaudeExecutionInput {
 }
 
 interface ClaudeRuntimeConfig {
+  executionLauncher: ClaudeExecutionLauncher;
   command: string;
   resolvedCommand: string;
   cwd: string;
@@ -136,7 +146,8 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
   const { runId, agent, config, context, runtimeCommandSpec, executionTarget, authToken } = input;
   const onLog = input.onLog ?? (async () => {});
 
-  const command = asString(config.command, "claude");
+  const executionLauncher = resolveClaudeExecutionLauncher(config);
+  const command = resolveClaudeLauncherCommand(config, executionLauncher);
   const workspaceContext = parseObject(context.paperclipWorkspace);
   const workspaceCwd = asString(workspaceContext.cwd, "");
   const workspaceSource = asString(workspaceContext.source, "");
@@ -292,10 +303,45 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
     graceSec,
     onLog,
   });
+  const launcherSandboxInstallCommand = executionLauncher === "shannon"
+    ? buildShannonSandboxInstallCommand()
+    : SANDBOX_INSTALL_COMMAND;
   await ensureAdapterExecutionTargetCommandResolvable(command, executionTarget, cwd, runtimeEnv, {
-    installCommand: SANDBOX_INSTALL_COMMAND,
+    installCommand: launcherSandboxInstallCommand,
     timeoutSec,
   });
+  if (executionLauncher === "shannon") {
+    const shannonClaudeCommand =
+      resolveShannonClaudeCommand(config) || DEFAULT_SHANNON_CLAUDE_COMMAND;
+    const dependencyChecks = [
+      {
+        command: "bun",
+        installCommand: buildShannonSandboxInstallCommand(),
+      },
+      {
+        command: "tmux",
+        installCommand: null,
+      },
+      {
+        command: shannonClaudeCommand,
+        installCommand: shannonClaudeCommand === DEFAULT_SHANNON_CLAUDE_COMMAND
+          ? buildShannonSandboxInstallCommand()
+          : null,
+      },
+    ];
+    for (const dependency of dependencyChecks) {
+      await ensureAdapterExecutionTargetCommandResolvable(
+        dependency.command,
+        executionTarget,
+        cwd,
+        runtimeEnv,
+        {
+          installCommand: dependency.installCommand,
+          timeoutSec,
+        },
+      );
+    }
+  }
   const resolvedCommand = await resolveAdapterExecutionTargetCommandForLogs(command, executionTarget, cwd, runtimeEnv);
   const loggedEnv = buildInvocationEnvForLogs(env, {
     runtimeEnv,
@@ -310,6 +356,7 @@ async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<Cl
   })();
 
   return {
+    executionLauncher,
     command,
     resolvedCommand,
     cwd,
@@ -333,10 +380,17 @@ export async function runClaudeLogin(input: {
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
 }) {
   const onLog = input.onLog ?? (async () => {});
+  const loginConfig = resolveClaudeExecutionLauncher(input.config) === "shannon"
+    ? {
+        ...input.config,
+        executionLauncher: "claude",
+        command: resolveShannonClaudeCommand(input.config) || DEFAULT_SHANNON_CLAUDE_COMMAND,
+      }
+    : input.config;
   const runtime = await buildClaudeRuntimeConfig({
     runId: input.runId,
     agent: input.agent,
-    config: input.config,
+    config: loginConfig,
     context: input.context ?? {},
     authToken: input.authToken,
   });
@@ -410,6 +464,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     onLog,
   });
   const {
+    executionLauncher,
     command,
     resolvedCommand,
     cwd,
@@ -422,6 +477,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     graceSec,
     extraArgs,
   } = runtimeConfig;
+  const runtimeLabel = executionLauncher === "shannon" ? "Shannon" : "Claude";
   let loggedEnv = initialLoggedEnv;
   let effectiveExecutionCwd = adapterExecutionTargetRemoteCwd(executionTarget, cwd);
   const terminalResultCleanupGraceMs = Math.max(
@@ -472,6 +528,12 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     : null;
   const preparedExecutionTargetRuntime = executionTargetIsRemote
     ? await (async () => {
+        const installCommand = executionLauncher === "shannon"
+          ? buildShannonSandboxEnsureInstallCommand({
+              shannonCommand: command,
+              claudeCommand: resolveShannonClaudeCommand(config) || DEFAULT_SHANNON_CLAUDE_COMMAND,
+            })
+          : SANDBOX_INSTALL_COMMAND;
         await onLog(
           "stdout",
           `[paperclip] Syncing workspace and Claude runtime assets to ${describeAdapterExecutionTarget(executionTarget)}.\n`,
@@ -482,8 +544,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
           adapterKey: "claude",
           timeoutSec,
           workspaceLocalDir: cwd,
-          installCommand: SANDBOX_INSTALL_COMMAND,
-          detectCommand: command,
+          installCommand,
+          detectCommand: executionLauncher === "shannon" ? null : command,
           assets: [
             {
               key: "skills",
@@ -688,6 +750,30 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     resumeSessionId: string | null,
     attemptInstructionsFilePath: string | undefined,
   ) => {
+    if (executionLauncher === "shannon") {
+      const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+      if (resumeSessionId) args.push("--resume", resumeSessionId);
+      args.push(...buildClaudeExecutionPermissionArgs({
+        dangerouslySkipPermissions,
+        targetIsSandbox: executionTargetIsSandbox,
+      }));
+      if (chrome) args.push("--chrome");
+      if (model && (!isBedrockAuth(effectiveEnv) || isBedrockModelId(model))) {
+        args.push("--model", model);
+      }
+      if (effort) args.push("--effort", effort);
+      const shannonClaudeCommand = resolveShannonClaudeCommand(config);
+      if (shannonClaudeCommand) {
+        args.push("--path-to-claude-code-executable", shannonClaudeCommand);
+      }
+      if (combinedInstructionsContents && !resumeSessionId) {
+        args.push("--append-system-prompt", combinedInstructionsContents);
+      }
+      args.push("--add-dir", effectivePromptBundleAddDir);
+      if (extraArgs.length > 0) args.push(...extraArgs);
+      return args;
+    }
+
     const args = ["--print", "-", "--output-format", "stream-json", "--verbose"];
     if (resumeSessionId) args.push("--resume", resumeSessionId);
     args.push(...buildClaudeExecutionPermissionArgs({
@@ -722,18 +808,28 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         .find(Boolean) ?? "";
 
     if ((proc.exitCode ?? 0) === 0) {
-      return "Failed to parse claude JSON output";
+      return `Failed to parse ${runtimeLabel} JSON output`;
     }
 
     return stderrLine
-      ? `Claude exited with code ${proc.exitCode ?? -1}: ${stderrLine}`
-      : `Claude exited with code ${proc.exitCode ?? -1}`;
+      ? `${runtimeLabel} exited with code ${proc.exitCode ?? -1}: ${stderrLine}`
+      : `${runtimeLabel} exited with code ${proc.exitCode ?? -1}`;
   };
 
   const runAttempt = async (resumeSessionId: string | null) => {
     const attemptInstructionsFilePath = resumeSessionId ? undefined : effectiveInstructionsFilePath;
     const args = buildClaudeArgs(resumeSessionId, attemptInstructionsFilePath);
     const commandNotes: string[] = [];
+    if (executionLauncher === "shannon") {
+      commandNotes.push(
+        "Launching Claude through Shannon interactive tmux mode instead of Claude print mode.",
+      );
+      if (maxTurns > 0) {
+        commandNotes.push(
+          "Shannon does not currently support Claude Code --max-turns, so maxTurnsPerRun was not passed.",
+        );
+      }
+    }
     if (!resumeSessionId) {
       commandNotes.push(`Using stable Claude prompt bundle ${promptBundle.bundleKey}.`);
     }
@@ -742,9 +838,14 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         "Using a broad --allowedTools whitelist for sandbox execution because Claude rejects --dangerously-skip-permissions under root/sudo.",
       );
     }
-    if (attemptInstructionsFilePath && !resumeSessionId) {
+    if (attemptInstructionsFilePath && !resumeSessionId && executionLauncher !== "shannon") {
       commandNotes.push(
         `Injected agent instructions via --append-system-prompt-file ${instructionsFilePath} (with path directive appended)`,
+      );
+    }
+    if (combinedInstructionsContents && !resumeSessionId && executionLauncher === "shannon") {
+      commandNotes.push(
+        `Injected agent instructions into Shannon via --append-system-prompt from ${instructionsFilePath}.`,
       );
     }
     if (onMeta) {
@@ -764,7 +865,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     const proc = await runAdapterExecutionTargetProcess(runId, runtimeExecutionTarget, command, args, {
       cwd,
       env,
-      stdin: prompt,
+      ...(executionLauncher === "shannon" ? { stdin: undefined } : { stdin: prompt }),
       timeoutSec,
       graceSec,
       onSpawn,

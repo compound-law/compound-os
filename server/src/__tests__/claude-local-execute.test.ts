@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { runChildProcess } from "@paperclipai/adapter-utils/server-utils";
-import { claudeSessionCwdMatchesExecutionTarget, execute } from "@paperclipai/adapter-claude-local/server";
+import { claudeSessionCwdMatchesExecutionTarget, execute, runClaudeLogin } from "@paperclipai/adapter-claude-local/server";
 
 async function writeFailingClaudeCommand(
   commandPath: string,
@@ -12,7 +12,8 @@ async function writeFailingClaudeCommand(
   const payload = JSON.stringify(options.resultEvent);
   const exit = options.exitCode ?? 1;
   const script = `#!/usr/bin/env node
-console.log(${JSON.stringify(payload)});
+const fs = require("node:fs");
+fs.writeSync(1, ${JSON.stringify(payload)} + "\\n");
 process.exit(${exit});
 `;
   await fs.writeFile(commandPath, script, "utf8");
@@ -47,6 +48,8 @@ const addDirIndex = argv.indexOf("--add-dir");
 const addDir = addDirIndex >= 0 ? argv[addDirIndex + 1] : null;
 const instructionsIndex = argv.indexOf("--append-system-prompt-file");
 const instructionsFilePath = instructionsIndex >= 0 ? argv[instructionsIndex + 1] : null;
+const inlineInstructionsIndex = argv.indexOf("--append-system-prompt");
+const appendedSystemPrompt = inlineInstructionsIndex >= 0 ? argv[inlineInstructionsIndex + 1] : null;
 const capturePath = process.env.PAPERCLIP_TEST_CAPTURE_PATH;
 const payload = {
   argv,
@@ -54,6 +57,7 @@ const payload = {
   addDir,
   instructionsFilePath,
   instructionsContents: instructionsFilePath ? fs.readFileSync(instructionsFilePath, "utf8") : null,
+  appendedSystemPrompt,
   skillEntries: addDir ? fs.readdirSync(path.join(addDir, ".claude", "skills")).sort() : [],
   claudeConfigDir: process.env.CLAUDE_CONFIG_DIR || null,
   claudeConfigEntries: process.env.CLAUDE_CONFIG_DIR && fs.existsSync(process.env.CLAUDE_CONFIG_DIR)
@@ -66,9 +70,22 @@ const payload = {
 if (capturePath) {
   fs.writeFileSync(capturePath, JSON.stringify(payload), "utf8");
 }
-console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "11111111-1111-4111-8111-111111111111", model: "claude-sonnet" }));
-console.log(JSON.stringify({ type: "assistant", session_id: "11111111-1111-4111-8111-111111111111", message: { content: [{ type: "text", text: "hello" }] } }));
-console.log(JSON.stringify({ type: "result", session_id: "11111111-1111-4111-8111-111111111111", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
+fs.writeSync(1, JSON.stringify({ type: "system", subtype: "init", session_id: "11111111-1111-4111-8111-111111111111", model: "claude-sonnet" }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "assistant", session_id: "11111111-1111-4111-8111-111111111111", message: { content: [{ type: "text", text: "hello" }] } }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "result", session_id: "11111111-1111-4111-8111-111111111111", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }) + "\\n");
+`;
+  await fs.writeFile(commandPath, script, "utf8");
+  await fs.chmod(commandPath, 0o755);
+}
+
+async function writeLoginCaptureClaudeCommand(commandPath: string): Promise<void> {
+  const script = `#!/usr/bin/env node
+const fs = require("node:fs");
+const capturePath = process.env.PAPERCLIP_TEST_CAPTURE_PATH;
+if (capturePath) {
+  fs.writeFileSync(capturePath, JSON.stringify({ argv: process.argv.slice(2) }), "utf8");
+}
+fs.writeSync(2, "Open https://claude.ai/login to authenticate.\\n");
 `;
   await fs.writeFile(commandPath, script, "utf8");
   await fs.chmod(commandPath, 0o755);
@@ -80,6 +97,7 @@ type CapturePayload = {
   addDir: string | null;
   instructionsFilePath: string | null;
   instructionsContents: string | null;
+  appendedSystemPrompt?: string | null;
   skillEntries: string[];
   claudeConfigDir: string | null;
   claudeConfigEntries?: string[];
@@ -109,18 +127,18 @@ const resumed = process.argv.includes("--resume");
 const shouldFailResume = resumed && statePath && !fs.existsSync(statePath);
 if (shouldFailResume) {
   fs.writeFileSync(statePath, "retried", "utf8");
-  console.log(JSON.stringify({
+  fs.writeSync(1, JSON.stringify({
     type: "result",
     subtype: "success",
     session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     is_error: true,
     result: "API Error: 400 diagnostics.previous_message_id: must be the \`id\` from a prior /v1/messages response (starts with \`msg_\`)",
-  }));
+  }) + "\\n");
   process.exit(1);
 }
-console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", model: "claude-sonnet" }));
-console.log(JSON.stringify({ type: "assistant", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", message: { content: [{ type: "text", text: "hello" }] } }));
-console.log(JSON.stringify({ type: "result", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
+fs.writeSync(1, JSON.stringify({ type: "system", subtype: "init", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", model: "claude-sonnet" }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "assistant", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", message: { content: [{ type: "text", text: "hello" }] } }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "result", session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }) + "\\n");
 `;
   await fs.writeFile(commandPath, script, "utf8");
   await fs.chmod(commandPath, 0o755);
@@ -143,13 +161,13 @@ if (capturePath) {
 // Both --resume and fresh attempts emit the poisoned previous_message_id result.
 // The fresh attempt still carries a session_id in the result; the adapter must
 // NOT persist it, otherwise the next continuation re-resumes a known-bad transcript.
-console.log(JSON.stringify({
+fs.writeSync(1, JSON.stringify({
   type: "result",
   subtype: "success",
   session_id: "fffff111-0000-4000-8000-000000000003",
   is_error: true,
   result: "API Error: 400 diagnostics.previous_message_id: must be the \`id\` from a prior /v1/messages response (starts with \`msg_\`)",
-}));
+}) + "\\n");
 process.exit(1);
 `;
   await fs.writeFile(commandPath, script, "utf8");
@@ -180,18 +198,18 @@ const resumed = process.argv.includes("--resume");
 const shouldFailResume = resumed && statePath && !fs.existsSync(statePath);
 if (shouldFailResume) {
   fs.writeFileSync(statePath, "retried", "utf8");
-  console.log(JSON.stringify({
+  fs.writeSync(1, JSON.stringify({
     type: "result",
     subtype: "error",
     session_id: "11111111-1111-4111-8111-111111111111",
     result: "No conversation found with session id 11111111-1111-4111-8111-111111111111",
     errors: ["No conversation found with session id 11111111-1111-4111-8111-111111111111"],
-  }));
+  }) + "\\n");
   process.exit(1);
 }
-console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "22222222-2222-4222-8222-222222222222", model: "claude-sonnet" }));
-console.log(JSON.stringify({ type: "assistant", session_id: "22222222-2222-4222-8222-222222222222", message: { content: [{ type: "text", text: "hello" }] } }));
-console.log(JSON.stringify({ type: "result", session_id: "22222222-2222-4222-8222-222222222222", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }));
+fs.writeSync(1, JSON.stringify({ type: "system", subtype: "init", session_id: "22222222-2222-4222-8222-222222222222", model: "claude-sonnet" }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "assistant", session_id: "22222222-2222-4222-8222-222222222222", message: { content: [{ type: "text", text: "hello" }] } }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "result", session_id: "22222222-2222-4222-8222-222222222222", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }) + "\\n");
 `;
   await fs.writeFile(commandPath, script, "utf8");
   await fs.chmod(commandPath, 0o755);
@@ -259,6 +277,35 @@ function createLocalSandboxRunner() {
 }
 
 describe("claude execute", () => {
+  it("runs Claude login through the underlying Claude executable when Shannon is selected", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-login-shannon-"));
+    const { workspace, capturePath, restore } = await setupExecuteEnv(root, {
+      commandWriter: writeLoginCaptureClaudeCommand,
+    });
+    try {
+      const result = await runClaudeLogin({
+        runId: "run-login-shannon",
+        agent: { id: "agent-1", companyId: "co-1", name: "Test", adapterType: "claude_local", adapterConfig: {} },
+        config: {
+          executionLauncher: "shannon",
+          command: "shannon",
+          cwd: workspace,
+          env: { PAPERCLIP_TEST_CAPTURE_PATH: capturePath },
+        },
+        context: {},
+        authToken: "tok",
+        onLog: async () => {},
+      });
+      const captured = JSON.parse(await fs.readFile(capturePath, "utf-8")) as { argv: string[] };
+      expect(captured.argv).toEqual(["login"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.loginUrl).toBe("https://claude.ai/login");
+    } finally {
+      restore();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   /**
    * Regression tests for https://github.com/paperclipai/paperclip/issues/2848
    *
@@ -321,6 +368,95 @@ describe("claude execute", () => {
       const captured = JSON.parse(await fs.readFile(capturePath, "utf-8"));
       expect(captured.argv).not.toContain("--append-system-prompt-file");
       expect(captured.argv).toContain("--resume");
+    } finally {
+      restore();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("launches Shannon with prompt args and inline instructions on a fresh session", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-exec-shannon-"));
+    const { workspace, commandPath, capturePath, restore } = await setupExecuteEnv(root);
+    const instructionsFile = path.join(root, "instructions.md");
+    await fs.writeFile(instructionsFile, "# Shannon agent instructions", "utf-8");
+    const metaEvents: Array<{ commandArgs: string[]; commandNotes: string[] }> = [];
+    try {
+      const result = await execute({
+        runId: "run-shannon",
+        agent: { id: "agent-1", companyId: "co-1", name: "Test", adapterType: "claude_local", adapterConfig: {} },
+        runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+        config: {
+          executionLauncher: "shannon",
+          command: commandPath,
+          cwd: workspace,
+          env: { PAPERCLIP_TEST_CAPTURE_PATH: capturePath },
+          promptTemplate: "Do Shannon work.",
+          instructionsFilePath: instructionsFile,
+          maxTurnsPerRun: 7,
+        },
+        context: {},
+        authToken: "tok",
+        onLog: async () => {},
+        onMeta: async (meta) => {
+          metaEvents.push({
+            commandArgs: ((meta.commandArgs as string[]) ?? []).slice(),
+            commandNotes: ((meta.commandNotes as string[]) ?? []).slice(),
+          });
+        },
+      });
+      const captured = JSON.parse(await fs.readFile(capturePath, "utf-8")) as CapturePayload;
+      const promptIndex = captured.argv.indexOf("-p");
+      expect(promptIndex).toBeGreaterThanOrEqual(0);
+      expect(captured.argv[promptIndex + 1]).toContain("Do Shannon work.");
+      expect(captured.prompt).toBe("");
+      expect(captured.argv).toContain("--output-format");
+      expect(captured.argv).toContain("stream-json");
+      expect(captured.argv).not.toContain("--print");
+      expect(captured.argv).not.toContain("--max-turns");
+      expect(captured.argv).not.toContain("--append-system-prompt-file");
+      expect(captured.argv).toContain("--append-system-prompt");
+      expect(captured.appendedSystemPrompt).toContain("# Shannon agent instructions");
+      expect(captured.appendedSystemPrompt).toContain(`The above agent instructions were loaded from ${instructionsFile}.`);
+      expect(captured.argv).toContain("--add-dir");
+      expect(metaEvents[0]?.commandNotes.some((note) => note.includes("Shannon"))).toBe(true);
+      expect(metaEvents[0]?.commandNotes.some((note) => note.includes("--max-turns"))).toBe(true);
+      expect(result.sessionId).toBe("11111111-1111-4111-8111-111111111111");
+    } finally {
+      restore();
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("passes Shannon --resume without re-injecting instructions on a resumed session", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-exec-shannon-resume-"));
+    const { workspace, commandPath, capturePath, restore } = await setupExecuteEnv(root);
+    const instructionsFile = path.join(root, "instructions.md");
+    await fs.writeFile(instructionsFile, "# Shannon agent instructions", "utf-8");
+    try {
+      await execute({
+        runId: "run-shannon-resume",
+        agent: { id: "agent-1", companyId: "co-1", name: "Test", adapterType: "claude_local", adapterConfig: {} },
+        runtime: { sessionId: "11111111-1111-4111-8111-111111111111", sessionParams: null, sessionDisplayId: null, taskKey: null },
+        config: {
+          executionLauncher: "shannon",
+          command: commandPath,
+          cwd: workspace,
+          env: { PAPERCLIP_TEST_CAPTURE_PATH: capturePath },
+          promptTemplate: "Do resumed Shannon work.",
+          instructionsFilePath: instructionsFile,
+        },
+        context: {},
+        authToken: "tok",
+        onLog: async () => {},
+        onMeta: async () => {},
+      });
+      const captured = JSON.parse(await fs.readFile(capturePath, "utf-8")) as CapturePayload;
+      expect(captured.argv).toContain("--resume");
+      expect(captured.argv).toContain("11111111-1111-4111-8111-111111111111");
+      expect(captured.argv).not.toContain("--append-system-prompt");
+      expect(captured.argv).not.toContain("--append-system-prompt-file");
+      expect(captured.appendedSystemPrompt).toBeNull();
+      expect(captured.prompt).toBe("");
     } finally {
       restore();
       await fs.rm(root, { recursive: true, force: true });

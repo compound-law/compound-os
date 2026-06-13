@@ -43,7 +43,9 @@ Core fields:
 - promptTemplate (string, optional): run prompt template
 - maxTurnsPerRun (number, optional): max turns for one run
 - dangerouslySkipPermissions (boolean, optional, default true): pass --dangerously-skip-permissions to claude; defaults to true because Paperclip runs Claude in headless --print mode where interactive permission prompts cannot be answered
-- command (string, optional): defaults to "claude"
+- executionLauncher (string, optional): "claude" (default) runs Claude Code print mode; "shannon" runs Claude Code through @dexh/shannon interactive tmux mode so subscription-backed Claude Code login can be used without claude -p
+- command (string, optional): defaults to "claude" when executionLauncher is "claude"; defaults to "shannon" when executionLauncher is "shannon"
+- shannonClaudeCommand (string, optional): Claude Code executable Shannon should drive; defaults to "claude" and is passed to Shannon as --path-to-claude-code-executable when set
 - extraArgs (string[], optional): additional CLI args
 - env (object, optional): KEY=VALUE environment variables
 - workspaceStrategy (object, optional): execution workspace strategy; currently supports { type: "git_worktree", baseRef?, branchTemplate?, worktreeParentDir? }
@@ -55,4 +57,8 @@ Operational fields:
 
 Notes:
 - When Paperclip realizes a workspace/runtime for a run, it injects PAPERCLIP_WORKSPACE_* and PAPERCLIP_RUNTIME_* env vars for agent-side tooling.
+- Shannon mode requires Bun, tmux, a resolvable Claude Code executable, and a working Claude Code login in the execution environment.
+- Shannon mode emits Claude-compatible stream JSON, so Paperclip keeps the existing Claude transcript parser, usage extraction, and session persistence.
+- Shannon does not support Claude Code --max-turns today; Paperclip intentionally does not pass maxTurnsPerRun in Shannon mode.
+- Fresh Shannon runs inject agent instructions with --append-system-prompt because Shannon accepts prompt text but not Paperclip's generated --append-system-prompt-file path.
 `;
