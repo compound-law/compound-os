@@ -113,8 +113,8 @@ RUN mkdir -p /opt/rtk-defaults/.claude \
   && HOME=/opt/rtk-defaults rtk init -g --codex \
   && chown -R node:node /opt/rtk-defaults
 
-COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-seed.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh
+COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-seed.sh scripts/claude-code-onboarding-seed.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh /usr/local/bin/claude-code-onboarding-seed.sh
 
 ENV NODE_ENV=production \
   HOME=/paperclip \

@@ -34,4 +34,8 @@ if [ "$changed" = "1" ]; then
     chown -R node:node /paperclip
 fi
 
+# Seed Claude Code's global TUI onboarding state for Shannon launches.
+# Set PAPERCLIP_CLAUDE_ONBOARDING_SEED_DISABLED=1 to skip.
+/usr/local/bin/claude-code-onboarding-seed.sh "${HOME:-/paperclip}" || echo "claude-code-onboarding-seed: failed (continuing)"
+
 exec gosu node "$@"
