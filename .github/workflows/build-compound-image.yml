@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - compound
+      - codex/shannon-claude-launcher
   workflow_dispatch:
 
 permissions:
