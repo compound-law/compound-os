@@ -10,6 +10,12 @@ services:
     restart: unless-stopped
     network_mode: host
     shm_size: "1gb"
+    # Hard memory cap: prevents the browser farm from exhausting host RAM and
+    # triggering system-wide swap thrash / OOM kills (see incident 2026-06-13).
+    # memswap_limit == mem_limit disables container swap, so a runaway browser is
+    # killed inside the container instead of dragging the host into reclaim.
+    mem_limit: "3g"
+    memswap_limit: "3g"
     environment:
       CAMOFOX_HOST: "${CAMOFOX_HOST:-127.0.0.1}"
       CAMOFOX_PORT: "${CAMOFOX_PORT:-9377}"
