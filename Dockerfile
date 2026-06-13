@@ -75,6 +75,14 @@ RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/cod
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
+# Patch @dexh/shannon's sendPrompt so the second-and-onwards user message
+# survives the tmux ARG_MAX cap. set-buffer puts the prompt on the command
+# line; load-buffer reads from a file. See scripts/patch-shannon-load-buffer.sh
+# for the full rationale.
+COPY scripts/patch-shannon-load-buffer.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/patch-shannon-load-buffer.sh \
+  && /usr/local/bin/patch-shannon-load-buffer.sh
+
 # Bake the dataforseo-claude shared infra into a throwaway dir so it survives
 # the /paperclip volume mount. dataforseo-claude-seed.sh (called from entrypoint)
 # copies it into /paperclip/dataforseo-claude on container boot.
