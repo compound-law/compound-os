@@ -374,7 +374,7 @@ describe("claude execute", () => {
     }
   });
 
-  it("launches Shannon with prompt args and inline instructions on a fresh session", async () => {
+  it("launches Shannon with prompt args and prepended instructions on a fresh session", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-exec-shannon-"));
     const { workspace, commandPath, capturePath, restore } = await setupExecuteEnv(root);
     const instructionsFile = path.join(root, "instructions.md");
@@ -408,15 +408,16 @@ describe("claude execute", () => {
       const promptIndex = captured.argv.indexOf("-p");
       expect(promptIndex).toBeGreaterThanOrEqual(0);
       expect(captured.argv[promptIndex + 1]).toContain("Do Shannon work.");
+      expect(captured.argv[promptIndex + 1]).toContain("# Shannon agent instructions");
+      expect(captured.argv[promptIndex + 1]).toContain(`The above agent instructions were loaded from ${instructionsFile}.`);
       expect(captured.prompt).toBe("");
       expect(captured.argv).toContain("--output-format");
       expect(captured.argv).toContain("stream-json");
       expect(captured.argv).not.toContain("--print");
       expect(captured.argv).not.toContain("--max-turns");
       expect(captured.argv).not.toContain("--append-system-prompt-file");
-      expect(captured.argv).toContain("--append-system-prompt");
-      expect(captured.appendedSystemPrompt).toContain("# Shannon agent instructions");
-      expect(captured.appendedSystemPrompt).toContain(`The above agent instructions were loaded from ${instructionsFile}.`);
+      expect(captured.argv).not.toContain("--append-system-prompt");
+      expect(captured.appendedSystemPrompt).toBeNull();
       expect(captured.argv).toContain("--add-dir");
       expect(metaEvents[0]?.commandNotes.some((note) => note.includes("Shannon"))).toBe(true);
       expect(metaEvents[0]?.commandNotes.some((note) => note.includes("--max-turns"))).toBe(true);

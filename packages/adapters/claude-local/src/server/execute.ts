@@ -746,12 +746,24 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     heartbeatPromptChars: renderedPrompt.length,
   };
 
+  const buildAttemptPrompt = (resumeSessionId: string | null) => {
+    if (executionLauncher !== "shannon" || resumeSessionId || !combinedInstructionsContents) {
+      return prompt;
+    }
+    return joinPromptSections([
+      "Agent instructions for this fresh Shannon session:",
+      combinedInstructionsContents,
+      prompt,
+    ]);
+  };
+
   const buildClaudeArgs = (
     resumeSessionId: string | null,
     attemptInstructionsFilePath: string | undefined,
+    attemptPrompt: string,
   ) => {
     if (executionLauncher === "shannon") {
-      const args = ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+      const args = ["-p", attemptPrompt, "--output-format", "stream-json", "--verbose"];
       if (resumeSessionId) args.push("--resume", resumeSessionId);
       args.push(...buildClaudeExecutionPermissionArgs({
         dangerouslySkipPermissions,
@@ -765,9 +777,6 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       const shannonClaudeCommand = resolveShannonClaudeCommand(config);
       if (shannonClaudeCommand) {
         args.push("--path-to-claude-code-executable", shannonClaudeCommand);
-      }
-      if (combinedInstructionsContents && !resumeSessionId) {
-        args.push("--append-system-prompt", combinedInstructionsContents);
       }
       args.push("--add-dir", effectivePromptBundleAddDir);
       if (extraArgs.length > 0) args.push(...extraArgs);
@@ -818,7 +827,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const runAttempt = async (resumeSessionId: string | null) => {
     const attemptInstructionsFilePath = resumeSessionId ? undefined : effectiveInstructionsFilePath;
-    const args = buildClaudeArgs(resumeSessionId, attemptInstructionsFilePath);
+    const attemptPrompt = buildAttemptPrompt(resumeSessionId);
+    const args = buildClaudeArgs(resumeSessionId, attemptInstructionsFilePath, attemptPrompt);
     const commandNotes: string[] = [];
     if (executionLauncher === "shannon") {
       commandNotes.push(
@@ -845,7 +855,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     }
     if (combinedInstructionsContents && !resumeSessionId && executionLauncher === "shannon") {
       commandNotes.push(
-        `Injected agent instructions into Shannon via --append-system-prompt from ${instructionsFilePath}.`,
+        `Prepended agent instructions from ${instructionsFilePath} to the fresh Shannon prompt.`,
       );
     }
     if (onMeta) {
@@ -856,7 +866,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         commandArgs: args,
         commandNotes,
         env: loggedEnv,
-        prompt,
+        prompt: attemptPrompt,
         promptMetrics,
         context,
       });
