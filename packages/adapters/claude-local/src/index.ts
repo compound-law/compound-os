@@ -60,5 +60,5 @@ Notes:
 - Shannon mode requires Bun, tmux, a resolvable Claude Code executable, and a working Claude Code login in the execution environment.
 - Shannon mode emits Claude-compatible stream JSON, so Paperclip keeps the existing Claude transcript parser, usage extraction, and session persistence.
 - Shannon does not support Claude Code --max-turns today; Paperclip intentionally does not pass maxTurnsPerRun in Shannon mode.
-- Fresh Shannon runs prepend agent instructions to the first prompt because Shannon accepts prompt text but not Paperclip's generated --append-system-prompt-file path.
+- Shannon runs use stream-json input with a small startup prompt, then send the Paperclip prompt through tmux paste-buffer. Fresh runs prepend agent instructions to that Paperclip prompt because Shannon does not use Paperclip's generated --append-system-prompt-file path.
 `;

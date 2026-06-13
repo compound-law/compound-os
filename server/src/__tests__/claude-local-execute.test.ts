@@ -374,7 +374,7 @@ describe("claude execute", () => {
     }
   });
 
-  it("launches Shannon with prompt args and prepended instructions on a fresh session", async () => {
+  it("launches Shannon with stream-json stdin and prepended instructions on a fresh session", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-claude-exec-shannon-"));
     const { workspace, commandPath, capturePath, restore } = await setupExecuteEnv(root);
     const instructionsFile = path.join(root, "instructions.md");
@@ -405,12 +405,18 @@ describe("claude execute", () => {
         },
       });
       const captured = JSON.parse(await fs.readFile(capturePath, "utf-8")) as CapturePayload;
-      const promptIndex = captured.argv.indexOf("-p");
-      expect(promptIndex).toBeGreaterThanOrEqual(0);
-      expect(captured.argv[promptIndex + 1]).toContain("Do Shannon work.");
-      expect(captured.argv[promptIndex + 1]).toContain("# Shannon agent instructions");
-      expect(captured.argv[promptIndex + 1]).toContain(`The above agent instructions were loaded from ${instructionsFile}.`);
-      expect(captured.prompt).toBe("");
+      const stdinPrompts = captured.prompt
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => JSON.parse(line) as { message: { content: string } })
+        .map((entry) => entry.message.content);
+      expect(stdinPrompts[0]).toBe("READY");
+      expect(stdinPrompts[1]).toContain("Do Shannon work.");
+      expect(stdinPrompts[1]).toContain("# Shannon agent instructions");
+      expect(stdinPrompts[1]).toContain(`The above agent instructions were loaded from ${instructionsFile}.`);
+      expect(captured.argv).not.toContain("-p");
+      expect(captured.argv).toContain("--input-format");
+      expect(captured.argv).toContain("stream-json");
       expect(captured.argv).toContain("--output-format");
       expect(captured.argv).toContain("stream-json");
       expect(captured.argv).not.toContain("--print");
@@ -454,10 +460,16 @@ describe("claude execute", () => {
       const captured = JSON.parse(await fs.readFile(capturePath, "utf-8")) as CapturePayload;
       expect(captured.argv).toContain("--resume");
       expect(captured.argv).toContain("11111111-1111-4111-8111-111111111111");
+      expect(captured.argv).not.toContain("-p");
       expect(captured.argv).not.toContain("--append-system-prompt");
       expect(captured.argv).not.toContain("--append-system-prompt-file");
       expect(captured.appendedSystemPrompt).toBeNull();
-      expect(captured.prompt).toBe("");
+      const stdinPrompts = captured.prompt
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => JSON.parse(line) as { message: { content: string } })
+        .map((entry) => entry.message.content);
+      expect(stdinPrompts).toEqual(["READY", "Do resumed Shannon work."]);
     } finally {
       restore();
       await fs.rm(root, { recursive: true, force: true });

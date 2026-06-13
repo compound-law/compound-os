@@ -74,6 +74,7 @@ import {
 } from "./launcher.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const SHANNON_BOOTSTRAP_PROMPT = "READY";
 
 interface ClaudeExecutionInput {
   runId: string;
@@ -757,13 +758,29 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     ]);
   };
 
+  const buildShannonStreamJsonInput = (attemptPrompt: string) => [
+    JSON.stringify({
+      type: "user",
+      message: {
+        role: "user",
+        content: SHANNON_BOOTSTRAP_PROMPT,
+      },
+    }),
+    JSON.stringify({
+      type: "user",
+      message: {
+        role: "user",
+        content: attemptPrompt,
+      },
+    }),
+  ].join("\n") + "\n";
+
   const buildClaudeArgs = (
     resumeSessionId: string | null,
     attemptInstructionsFilePath: string | undefined,
-    attemptPrompt: string,
   ) => {
     if (executionLauncher === "shannon") {
-      const args = ["-p", attemptPrompt, "--output-format", "stream-json", "--verbose"];
+      const args = ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose"];
       if (resumeSessionId) args.push("--resume", resumeSessionId);
       args.push(...buildClaudeExecutionPermissionArgs({
         dangerouslySkipPermissions,
@@ -828,7 +845,10 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const runAttempt = async (resumeSessionId: string | null) => {
     const attemptInstructionsFilePath = resumeSessionId ? undefined : effectiveInstructionsFilePath;
     const attemptPrompt = buildAttemptPrompt(resumeSessionId);
-    const args = buildClaudeArgs(resumeSessionId, attemptInstructionsFilePath, attemptPrompt);
+    const args = buildClaudeArgs(resumeSessionId, attemptInstructionsFilePath);
+    const shannonInput = executionLauncher === "shannon"
+      ? buildShannonStreamJsonInput(attemptPrompt)
+      : undefined;
     const commandNotes: string[] = [];
     if (executionLauncher === "shannon") {
       commandNotes.push(
@@ -839,6 +859,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
           "Shannon does not currently support Claude Code --max-turns, so maxTurnsPerRun was not passed.",
         );
       }
+      commandNotes.push(
+        "Sending Paperclip prompts to Shannon with stream-json input so only a small bootstrap prompt is passed through tmux startup.",
+      );
     }
     if (!resumeSessionId) {
       commandNotes.push(`Using stable Claude prompt bundle ${promptBundle.bundleKey}.`);
@@ -875,7 +898,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     const proc = await runAdapterExecutionTargetProcess(runId, runtimeExecutionTarget, command, args, {
       cwd,
       env,
-      ...(executionLauncher === "shannon" ? { stdin: undefined } : { stdin: prompt }),
+      stdin: executionLauncher === "shannon" ? shannonInput : prompt,
       timeoutSec,
       graceSec,
       onSpawn,
