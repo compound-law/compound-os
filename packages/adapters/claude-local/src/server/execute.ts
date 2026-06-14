@@ -747,10 +747,43 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     heartbeatPromptChars: renderedPrompt.length,
   };
 
-  const buildAttemptPrompt = (resumeSessionId: string | null) => {
+  // For Shannon mode we write the agent instructions to <cwd>/.claude/CLAUDE.md
+  // BEFORE launching Shannon, so Claude TUI auto-loads them as system context
+  // (not as a user message). Prepending them to the prompt sent them to Claude
+  // as conversation, which made the TUI respond with a generic "I'm ready to
+  // help!" instead of activating the agent's persona. Returns false if the
+  // write fails so the caller falls back to the prepend behavior.
+  const writeShannonClaudeMd = async (): Promise<boolean> => {
+    if (executionLauncher !== "shannon" || !combinedInstructionsContents) return true;
+    try {
+      const claudeDir = path.join(cwd, ".claude");
+      await fs.mkdir(claudeDir, { recursive: true });
+      await fs.writeFile(
+        path.join(claudeDir, "CLAUDE.md"),
+        combinedInstructionsContents,
+        "utf-8",
+      );
+      return true;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      await onLog(
+        "stderr",
+        `[paperclip] Warning: could not write Shannon CLAUDE.md to ${cwd}/.claude/: ${reason}\n`,
+      );
+      return false;
+    }
+  };
+
+  const buildAttemptPrompt = (resumeSessionId: string | null, claudeMdWritten: boolean) => {
     if (executionLauncher !== "shannon" || resumeSessionId || !combinedInstructionsContents) {
       return prompt;
     }
+    // If CLAUDE.md write succeeded, Claude TUI auto-loads the instructions as
+    // system context — pass only the small task prompt as the user message so
+    // the agent's persona governs the response.
+    if (claudeMdWritten) return prompt;
+    // Write failed — fall back to the legacy prepend so the model at least
+    // sees the instructions, even if they leak into the conversation buffer.
     return joinPromptSections([
       "Agent instructions for this fresh Shannon session:",
       combinedInstructionsContents,
@@ -844,7 +877,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
   const runAttempt = async (resumeSessionId: string | null) => {
     const attemptInstructionsFilePath = resumeSessionId ? undefined : effectiveInstructionsFilePath;
-    const attemptPrompt = buildAttemptPrompt(resumeSessionId);
+    const claudeMdWritten = resumeSessionId ? false : await writeShannonClaudeMd();
+    const attemptPrompt = buildAttemptPrompt(resumeSessionId, claudeMdWritten);
     const args = buildClaudeArgs(resumeSessionId, attemptInstructionsFilePath);
     const shannonInput = executionLauncher === "shannon"
       ? buildShannonStreamJsonInput(attemptPrompt)
@@ -876,7 +910,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         `Injected agent instructions via --append-system-prompt-file ${instructionsFilePath} (with path directive appended)`,
       );
     }
-    if (combinedInstructionsContents && !resumeSessionId && executionLauncher === "shannon") {
+    if (combinedInstructionsContents && !resumeSessionId && executionLauncher === "shannon" && claudeMdWritten) {
+      commandNotes.push(
+        `Wrote agent instructions to ${cwd}/.claude/CLAUDE.md so Claude TUI auto-loads them as system context.`,
+      );
+    } else if (combinedInstructionsContents && !resumeSessionId && executionLauncher === "shannon") {
       commandNotes.push(
         `Prepended agent instructions from ${instructionsFilePath} to the fresh Shannon prompt.`,
       );
