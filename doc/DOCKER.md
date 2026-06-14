@@ -261,4 +261,5 @@ Notes:
 ## General Notes
 
 - The `docker-entrypoint.sh` adjusts the container `node` user UID/GID at startup to match the values passed via `USER_UID`/`USER_GID`, avoiding permission issues on bind-mounted volumes.
+- The entrypoint normalizes `$HOME/.claude.json` so Claude Code's interactive TUI skips first-run onboarding when launched through Shannon. Set `PAPERCLIP_CLAUDE_ONBOARDING_SEED_DISABLED=1` to opt out.
 - Paperclip data persists via Docker volumes/bind mounts (compose) or at `~/.local/share/paperclip` (quadlet).

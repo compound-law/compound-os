@@ -399,6 +399,12 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   const rawModels = fetchedModels ?? externalModels ?? [];
   const adapterCommandField =
     adapterType === "hermes_local" ? "hermesCommand" : "command";
+  const claudeExecutionLauncher =
+    adapterType === "claude_local"
+      ? isCreate
+        ? val!.executionLauncher ?? "claude"
+        : eff("adapterConfig", "executionLauncher", String(config.executionLauncher ?? "claude"))
+      : "claude";
   const acpxAgent =
     adapterType === "acpx_local"
       ? isCreate
@@ -1029,7 +1035,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
                   className={inputClass}
                   placeholder={
                     ({
-                      claude_local: "claude",
+                      claude_local: claudeExecutionLauncher === "shannon" ? "shannon" : "claude",
                       codex_local: "codex",
                       gemini_local: "gemini",
                       pi_local: "pi",

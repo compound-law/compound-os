@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { buildSandboxNpmInstallCommand } from "@paperclipai/adapter-utils";
+import { buildShannonSandboxEnsureInstallCommand } from "@paperclipai/adapter-claude-local/server";
 import type { ServerAdapterModule } from "../adapters/index.js";
 
 const hermesExecuteMock = vi.hoisted(() =>
@@ -22,6 +23,59 @@ vi.mock("hermes-paperclip-adapter/server", () => ({
   listSkills: async () => [],
   syncSkills: async () => ({ entries: [] }),
   detectModel: async () => null,
+}));
+
+vi.mock("@paperclipai/adapter-acpx-local/server", () => ({
+  execute: async () => ({ exitCode: 0, signal: null, timedOut: false }),
+  testEnvironment: async () => ({
+    adapterType: "acpx_local",
+    status: "pass",
+    checks: [],
+    testedAt: new Date(0).toISOString(),
+  }),
+  sessionCodec: null,
+  getConfigSchema: () => ({ fields: [] }),
+  listAcpxSkills: async () => [],
+  syncAcpxSkills: async () => ({ entries: [] }),
+}));
+
+vi.mock("@paperclipai/adapter-acpx-local", () => ({
+  agentConfigurationDoc: "acpx docs",
+  models: [],
+}));
+
+vi.mock("@paperclipai/adapter-cursor-cloud/server", () => ({
+  execute: async () => ({ exitCode: 0, signal: null, timedOut: false }),
+  testEnvironment: async () => ({
+    adapterType: "cursor_cloud",
+    status: "pass",
+    checks: [],
+    testedAt: new Date(0).toISOString(),
+  }),
+  sessionCodec: null,
+  getConfigSchema: () => ({ fields: [] }),
+}));
+
+vi.mock("@paperclipai/adapter-cursor-cloud", () => ({
+  agentConfigurationDoc: "cursor cloud docs",
+}));
+
+vi.mock("@paperclipai/adapter-grok-local/server", () => ({
+  execute: async () => ({ exitCode: 0, signal: null, timedOut: false }),
+  testEnvironment: async () => ({
+    adapterType: "grok_local",
+    status: "pass",
+    checks: [],
+    testedAt: new Date(0).toISOString(),
+  }),
+  sessionCodec: null,
+  listGrokSkills: async () => [],
+  syncGrokSkills: async () => ({ entries: [] }),
+}));
+
+vi.mock("@paperclipai/adapter-grok-local", () => ({
+  agentConfigurationDoc: "grok docs",
+  models: [],
 }));
 
 import {
@@ -235,6 +289,7 @@ describe("server adapter registry", () => {
 
   it("wraps built-in npm runtime installs with the sandbox-aware install helper", () => {
     const expectedClaudeInstall = `if ! command -v 'claude' >/dev/null 2>&1; then ${buildSandboxNpmInstallCommand("@anthropic-ai/claude-code")}; fi`;
+    const expectedShannonInstall = buildShannonSandboxEnsureInstallCommand();
     const expectedCodexInstall = `if ! command -v 'codex' >/dev/null 2>&1; then ${buildSandboxNpmInstallCommand("@openai/codex")}; fi`;
     const expectedGeminiInstall = `if ! command -v 'gemini' >/dev/null 2>&1; then ${buildSandboxNpmInstallCommand("@google/gemini-cli")}; fi`;
     const expectedOpenCodeInstall = `if ! command -v 'opencode' >/dev/null 2>&1; then ${buildSandboxNpmInstallCommand("opencode-ai")}; fi`;
@@ -243,6 +298,11 @@ describe("server adapter registry", () => {
       command: "claude",
       detectCommand: "claude",
       installCommand: expectedClaudeInstall,
+    });
+    expect(findActiveServerAdapter("claude_local")?.getRuntimeCommandSpec?.({ executionLauncher: "shannon" })).toEqual({
+      command: "shannon",
+      detectCommand: null,
+      installCommand: expectedShannonInstall,
     });
     expect(findActiveServerAdapter("codex_local")?.getRuntimeCommandSpec?.({})).toEqual({
       command: "codex",

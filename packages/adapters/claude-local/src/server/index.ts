@@ -1,4 +1,11 @@
 export { claudeSessionCwdMatchesExecutionTarget, execute, runClaudeLogin } from "./execute.js";
+export {
+  buildShannonSandboxInstallCommand,
+  buildShannonSandboxEnsureInstallCommand,
+  resolveClaudeExecutionLauncher,
+  resolveClaudeLauncherCommand,
+  resolveShannonClaudeCommand,
+} from "./launcher.js";
 export { listClaudeSkills, syncClaudeSkills } from "./skills.js";
 export { listClaudeModels, refreshClaudeModels, resetClaudeModelsCacheForTests } from "./models.js";
 export { testEnvironment } from "./test.js";

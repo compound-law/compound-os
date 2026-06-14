@@ -68,12 +68,20 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 WORKDIR /app
 COPY --chown=node:node --from=build /app /app
-RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest @googleworkspace/cli@latest \
+RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest @googleworkspace/cli@latest bun@latest @dexh/shannon@latest \
   && apt-get update \
-  && apt-get install -y --no-install-recommends openssh-client jq python3-httpx python3-reportlab \
+  && apt-get install -y --no-install-recommends openssh-client jq python3-httpx python3-reportlab tmux \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
+
+# Patch @dexh/shannon's sendPrompt so the second-and-onwards user message
+# survives the tmux ARG_MAX cap. set-buffer puts the prompt on the command
+# line; load-buffer reads from a file. See scripts/patch-shannon-load-buffer.sh
+# for the full rationale.
+COPY scripts/patch-shannon-load-buffer.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/patch-shannon-load-buffer.sh \
+  && /usr/local/bin/patch-shannon-load-buffer.sh
 
 # Bake the dataforseo-claude shared infra into a throwaway dir so it survives
 # the /paperclip volume mount. dataforseo-claude-seed.sh (called from entrypoint)
@@ -113,8 +121,8 @@ RUN mkdir -p /opt/rtk-defaults/.claude \
   && HOME=/opt/rtk-defaults rtk init -g --codex \
   && chown -R node:node /opt/rtk-defaults
 
-COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-seed.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh
+COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-seed.sh scripts/claude-code-onboarding-seed.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh /usr/local/bin/claude-code-onboarding-seed.sh
 
 ENV NODE_ENV=production \
   HOME=/paperclip \

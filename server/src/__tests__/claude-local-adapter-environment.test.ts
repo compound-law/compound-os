@@ -26,6 +26,28 @@ afterEach(() => {
   }
 });
 
+async function writeExecutable(filePath: string, body: string): Promise<void> {
+  await fs.writeFile(filePath, body, "utf8");
+  await fs.chmod(filePath, 0o755);
+}
+
+async function writeShannonProbeCommand(commandPath: string): Promise<void> {
+  await writeExecutable(commandPath, `#!/usr/bin/env node
+const fs = require("node:fs");
+const capturePath = process.env.PAPERCLIP_TEST_CAPTURE_PATH;
+const payload = {
+  argv: process.argv.slice(2),
+  stdin: fs.readFileSync(0, "utf8"),
+};
+if (capturePath) {
+  fs.writeFileSync(capturePath, JSON.stringify(payload), "utf8");
+}
+fs.writeSync(1, JSON.stringify({ type: "system", subtype: "init", session_id: "11111111-1111-4111-8111-111111111111", model: "claude-sonnet" }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "assistant", session_id: "11111111-1111-4111-8111-111111111111", message: { content: [{ type: "text", text: "hello" }] } }) + "\\n");
+fs.writeSync(1, JSON.stringify({ type: "result", session_id: "11111111-1111-4111-8111-111111111111", result: "hello", usage: { input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 } }) + "\\n");
+`);
+}
+
 describe("claude_local environment diagnostics", () => {
   it("returns a warning (not an error) when ANTHROPIC_API_KEY is set in host environment", async () => {
     delete process.env.CLAUDE_CODE_USE_BEDROCK;
@@ -277,5 +299,64 @@ describe("claude_local environment diagnostics", () => {
     // by the probe prompt cannot stall waiting for an interactive permission
     // approval that no human is present to answer.
     expect(probeCall?.args).toContain("--allowedTools");
+  });
+
+  it("runs a Shannon hello probe after checking Shannon dependencies", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.CLAUDE_CODE_USE_BEDROCK;
+    delete process.env.ANTHROPIC_BEDROCK_BASE_URL;
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-shannon-envtest-"));
+    const binDir = path.join(root, "bin");
+    const capturePath = path.join(root, "capture.json");
+    await fs.mkdir(binDir, { recursive: true });
+    await writeShannonProbeCommand(path.join(binDir, "shannon"));
+    await writeExecutable(path.join(binDir, "bun"), "#!/bin/sh\nexit 0\n");
+    await writeExecutable(path.join(binDir, "tmux"), "#!/bin/sh\nexit 0\n");
+    await writeExecutable(path.join(binDir, "claude"), "#!/bin/sh\nexit 0\n");
+
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ""}`;
+    try {
+      const result = await testEnvironment({
+        companyId: "company-1",
+        adapterType: "claude_local",
+        config: {
+          executionLauncher: "shannon",
+          command: "shannon",
+          cwd: root,
+          maxTurnsPerRun: 9,
+          env: {
+            PAPERCLIP_TEST_CAPTURE_PATH: capturePath,
+          },
+        },
+      });
+
+      const codes = result.checks.map((check) => check.code);
+      expect(result.status).toBe("pass");
+      expect(codes).toContain("shannon_command_resolvable");
+      expect(codes).toContain("shannon_bun_resolvable");
+      expect(codes).toContain("shannon_tmux_resolvable");
+      expect(codes).toContain("shannon_claude_command_resolvable");
+      expect(codes).toContain("shannon_hello_probe_passed");
+      expect(codes).not.toContain("claude_hello_probe_passed");
+
+      const captured = JSON.parse(await fs.readFile(capturePath, "utf-8")) as {
+        argv: string[];
+        stdin: string;
+      };
+      const promptIndex = captured.argv.indexOf("-p");
+      expect(promptIndex).toBeGreaterThanOrEqual(0);
+      expect(captured.argv[promptIndex + 1]).toBe("Respond with hello.");
+      expect(captured.argv).toContain("--output-format");
+      expect(captured.argv).toContain("stream-json");
+      expect(captured.argv).not.toContain("--print");
+      expect(captured.argv).not.toContain("--max-turns");
+      expect(captured.stdin).toBe("");
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });
