@@ -66,7 +66,7 @@ import { SANDBOX_INSTALL_COMMAND } from "../index.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-interface ClaudeExecutionInput {
+export interface ClaudeExecutionInput {
   runId: string;
   agent: AdapterExecutionContext["agent"];
   config: Record<string, unknown>;
@@ -77,7 +77,7 @@ interface ClaudeExecutionInput {
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
 }
 
-interface ClaudeRuntimeConfig {
+export interface ClaudeRuntimeConfig {
   command: string;
   resolvedCommand: string;
   cwd: string;
@@ -127,12 +127,12 @@ function isBedrockAuth(env: Record<string, string>): boolean {
   );
 }
 
-function resolveClaudeBillingType(env: Record<string, string>): "api" | "subscription" | "metered_api" {
+export function resolveClaudeBillingType(env: Record<string, string>): "api" | "subscription" | "metered_api" {
   if (isBedrockAuth(env)) return "metered_api";
   return hasNonEmptyEnvValue(env, "ANTHROPIC_API_KEY") ? "api" : "subscription";
 }
 
-async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<ClaudeRuntimeConfig> {
+export async function buildClaudeRuntimeConfig(input: ClaudeExecutionInput): Promise<ClaudeRuntimeConfig> {
   const { runId, agent, config, context, runtimeCommandSpec, executionTarget, authToken } = input;
   const onLog = input.onLog ?? (async () => {});
 
@@ -363,6 +363,12 @@ export async function runClaudeLogin(input: {
 
 export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
   const { runId, agent, runtime, config, context, onLog, onMeta, onSpawn, authToken } = ctx;
+
+  if (asString(config.mode, "") === "interactive") {
+    const { executeInteractive } = await import("./execute-interactive.js");
+    return executeInteractive(ctx);
+  }
+
   const executionTarget = readAdapterExecutionTarget({
     executionTarget: ctx.executionTarget,
     legacyRemoteExecution: ctx.executionTransport?.remoteExecution,

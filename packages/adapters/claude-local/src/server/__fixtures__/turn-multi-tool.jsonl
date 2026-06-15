@@ -1,0 +1,7 @@
+{"type":"MODE","timestamp":"2026-06-15T10:00:00.000Z"}
+{"type":"user","sessionId":"4dc5421a-4e9d-4613-94fe-183f86bcf917","cwd":"/Users/dev/project","timestamp":"2026-06-15T10:00:01.000Z","message":{"role":"user","content":"List the files then say done"}}
+{"type":"assistant","sessionId":"4dc5421a-4e9d-4613-94fe-183f86bcf917","cwd":"/Users/dev/project","timestamp":"2026-06-15T10:00:03.000Z","message":{"model":"claude-opus-4-8","role":"assistant","stop_reason":"tool_use","content":[{"type":"text","text":"Listing the files."},{"type":"tool_use","name":"Bash","input":{"command":"ls"}}],"usage":{"input_tokens":1200,"output_tokens":40,"cache_read_input_tokens":8000,"cache_creation_input_tokens":500,"service_tier":"standard"}}}
+{"type":"user","sessionId":"4dc5421a-4e9d-4613-94fe-183f86bcf917","timestamp":"2026-06-15T10:00:04.000Z","message":{"role":"user","content":[{"type":"tool_result","content":"a.txt\nb.txt"}]}}
+{"type":"FILE-HISTORY-SNAPSHOT","timestamp":"2026-06-15T10:00:04.500Z"}
+{"type":"assistant","sessionId":"4dc5421a-4e9d-4613-94fe-183f86bcf917","cwd":"/Users/dev/project","timestamp":"2026-06-15T10:00:06.000Z","message":{"model":"claude-opus-4-8","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}],"usage":{"input_tokens":1300,"output_tokens":4,"cache_read_input_tokens":8200,"cache_creation_input_tokens":0,"service_tier":"standard"}}}
+{"type":"SYSTEM","timestamp":"2026-06-15T10:00:06.500Z"}
