@@ -32,6 +32,7 @@ export const help: Record<string, string> = {
   thinkingEffort: "Control model reasoning depth. Supported values vary by adapter/model.",
   chrome: "Enable Claude's Chrome integration by passing --chrome.",
   dangerouslySkipPermissions: "Run unattended by auto-approving adapter permission prompts when supported.",
+  interactiveMode: "Drive an interactive Claude Code session via tmux instead of `claude --print`, so runs use your Claude subscription rather than metered API. Requires local execution, tmux installed, and no ANTHROPIC_API_KEY.",
   dangerouslyBypassSandbox: "Run Codex without sandbox restrictions. Required for filesystem/network access.",
   search: "Enable Codex web search capability during runs.",
   fastMode: "Enable Codex Fast mode. This burns credits/tokens much faster and is supported on GPT-5.4 and manual Codex model IDs.",

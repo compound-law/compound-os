@@ -483,6 +483,8 @@ export interface CreateConfigValues {
   cheapModelEnabled?: boolean;
   chrome: boolean;
   dangerouslySkipPermissions: boolean;
+  /** claude-local only: drive an interactive tmux session (subscription billing) instead of `claude --print`. */
+  interactiveMode: boolean;
   search: boolean;
   fastMode: boolean;
   dangerouslyBypassSandbox: boolean;

@@ -81,6 +81,20 @@ export function ClaudeLocalAdvancedFields({
   return (
     <>
       <ToggleField
+        label="Interactive mode (subscription billing)"
+        hint={help.interactiveMode}
+        checked={
+          isCreate
+            ? values!.interactiveMode
+            : eff("adapterConfig", "mode", String(config.mode ?? "")) === "interactive"
+        }
+        onChange={(v) =>
+          isCreate
+            ? set!({ interactiveMode: v })
+            : mark("adapterConfig", "mode", v ? "interactive" : "headless")
+        }
+      />
+      <ToggleField
         label="Enable Chrome"
         hint={help.chrome}
         checked={

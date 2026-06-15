@@ -85,3 +85,26 @@ Use the "Test Environment" button in the UI to validate the adapter config. It c
 - Working directory is absolute and available (auto-created if missing and permitted)
 - API key/auth mode hints (`ANTHROPIC_API_KEY` vs subscription login)
 - A live hello probe (`claude --print - --output-format stream-json --verbose` with prompt `Respond with hello.`) to verify CLI readiness
+
+## Interactive mode (subscription billing)
+
+Set adapter config `mode: "interactive"` to drive a persistent interactive
+Claude Code session via tmux instead of `claude --print`. Use this to consume a
+Claude subscription rather than metered API usage.
+
+Requirements and constraints:
+- **Local execution only.** Remote/SSH/sandbox targets are not supported.
+- **Subscription auth required.** `ANTHROPIC_API_KEY` and Bedrock env must be
+  unset; the adapter refuses interactive mode under API-key/metered auth.
+- **tmux must be installed** on the host.
+- Token usage is read from the on-disk session transcript
+  (`~/.claude/projects/<cwd-hash>/<sessionId>.jsonl`) and reported with
+  `billingType: "subscription"`.
+- `maxTurnsPerRun` bounds a single interactive heartbeat turn (applied at launch).
+- Optional config: `interactiveQuietMs` (default 2000), `interactiveReadyTimeoutMs`
+  (default 20000), `timeoutSec` (poll cap; 0/unset → 30min).
+
+Enable it from the UI via the "Interactive mode (subscription billing)" toggle in
+the Claude (local) agent config. The tmux session (`paperclip-<agentId>`) persists
+across heartbeats and survives Paperclip restarts; attach with
+`tmux attach -t paperclip-<agentId>` to watch.
