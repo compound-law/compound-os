@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - compound
+      - feat/claude-local-interactive-tmux
   workflow_dispatch:
 
 permissions:
