@@ -10,6 +10,11 @@ services:
     restart: unless-stopped
     network_mode: host
     shm_size: "1gb"
+    # Hard memory cap (2g) — keeps the browser farm from exhausting host RAM.
+    # mem == swap disables container swap so a runaway browser is killed inside
+    # the container rather than dragging the host into reclaim thrash.
+    mem_limit: "2g"
+    memswap_limit: "2g"
     environment:
       CAMOFOX_HOST: "${CAMOFOX_HOST:-127.0.0.1}"
       CAMOFOX_PORT: "${CAMOFOX_PORT:-9377}"
