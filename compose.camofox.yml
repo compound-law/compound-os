@@ -15,6 +15,8 @@ services:
     # the container rather than dragging the host into reclaim thrash.
     mem_limit: "2g"
     memswap_limit: "2g"
+    cpus: 1.5
+    cpu_shares: 512
     environment:
       CAMOFOX_HOST: "${CAMOFOX_HOST:-127.0.0.1}"
       CAMOFOX_PORT: "${CAMOFOX_PORT:-9377}"
