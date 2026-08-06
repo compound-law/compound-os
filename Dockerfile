@@ -110,25 +110,6 @@ RUN echo "cli-tools-epoch: ${CLI_TOOLS_CACHE_EPOCH}" \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
-# Bake the dataforseo-claude shared infra into a throwaway dir so it survives
-# the /paperclip volume mount. dataforseo-claude-seed.sh (called from entrypoint)
-# copies it into /paperclip/dataforseo-claude on container boot.
-#
-# Also bake the 13 sub-skill SKILL.md files into /opt/dataforseo-claude-skills/
-# and then REMOVE dataforseo-claude from /app/skills/. This is critical:
-# Paperclip's bundled-skill discovery flags every SKILL.md under /app/skills/ as
-# required=true on every agent (server/src/services/company-skills.ts:2183),
-# which prevents per-agent skill scoping via the sync API. By staging the
-# sub-skills outside /app/skills/, they become available for selective
-# per-company import (via the seed script) without forcing them onto every
-# agent in every company.
-RUN cp -R /app/skills/dataforseo-claude/seo /opt/dataforseo-claude-defaults \
-  && cp /app/skills/dataforseo-claude/requirements.txt /opt/dataforseo-claude-defaults/requirements.txt \
-  && chmod +x /opt/dataforseo-claude-defaults/scripts/*.py /opt/dataforseo-claude-defaults/scripts/preflight.sh \
-  && mkdir -p /opt/dataforseo-claude-skills \
-  && cp -R /app/skills/dataforseo-claude/skills/. /opt/dataforseo-claude-skills/ \
-  && rm -rf /app/skills/dataforseo-claude
-
 # Install gcloud CLI (required by gws auth setup)
 RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
   && ln -sf /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud \
@@ -152,6 +133,29 @@ COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh
 
 COPY --chown=node:node --from=build /app /app
+
+# Bake the dataforseo-claude shared infra into a throwaway dir so it survives
+# the /paperclip volume mount. dataforseo-claude-seed.sh (called from entrypoint)
+# copies it into /paperclip/dataforseo-claude on container boot.
+#
+# Also bake the 13 sub-skill SKILL.md files into /opt/dataforseo-claude-skills/
+# and then REMOVE dataforseo-claude from /app/skills/. This is critical:
+# Paperclip's bundled-skill discovery flags every SKILL.md under /app/skills/ as
+# required=true on every agent (server/src/services/company-skills.ts:2183),
+# which prevents per-agent skill scoping via the sync API. By staging the
+# sub-skills outside /app/skills/, they become available for selective
+# per-company import (via the seed script) without forcing them onto every
+# agent in every company.
+#
+# Must run AFTER the `/app` copy above — upstream restructured the production
+# stage to install CLI tools BEFORE the app copy for layer cache reuse, so
+# anything that reads from /app/skills has to sit below the COPY line.
+RUN cp -R /app/skills/dataforseo-claude/seo /opt/dataforseo-claude-defaults \
+  && cp /app/skills/dataforseo-claude/requirements.txt /opt/dataforseo-claude-defaults/requirements.txt \
+  && chmod +x /opt/dataforseo-claude-defaults/scripts/*.py /opt/dataforseo-claude-defaults/scripts/preflight.sh \
+  && mkdir -p /opt/dataforseo-claude-skills \
+  && cp -R /app/skills/dataforseo-claude/skills/. /opt/dataforseo-claude-skills/ \
+  && rm -rf /app/skills/dataforseo-claude
 
 ENV NODE_ENV=production \
   HOME=/paperclip \
