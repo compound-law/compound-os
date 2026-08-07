@@ -45,6 +45,12 @@ jobs:
         uses: useblacksmith/build-push-action@v2
         with:
           context: .
+          # Pin to the `production` stage. Upstream added a later `cloud` stage
+          # to the Dockerfile (used by their managed cloud image) and Docker's
+          # default target is the last stage — without this line the build
+          # silently retargets `cloud`, which needs setup we don't have and
+          # fails inside buildx at 22s with a bare `solver/jobs.go` pointer.
+          target: production
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
