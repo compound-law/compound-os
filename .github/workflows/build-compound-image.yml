@@ -21,6 +21,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Mirror upstream's docker.yml: refresh the lockfile before the Docker
+      # build. Upstream's Dockerfile uses --frozen-lockfile, but they don't
+      # keep pnpm-lock.yaml perfectly in sync with every package.json change
+      # on master — their own CI does this refresh, and we need to do the
+      # same or the build fails inside pnpm install on any upstream commit
+      # that shipped a package change without a lockfile bump.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Refresh lockfile for Docker build context
+        run: |
+          set -euo pipefail
+          pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
+          changed="$(git status --porcelain)"
+          if [ -z "$changed" ]; then
+            echo "Lockfile already matches package metadata."
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -Fvq ' pnpm-lock.yaml'; then
+            echo "Unexpected files changed during lockfile refresh:"
+            echo "$changed"
+            exit 1
+          fi
+          echo "Using refreshed pnpm-lock.yaml in the Docker build context."
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -29,7 +62,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: useblacksmith/setup-docker-builder@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Docker meta
         id: meta
@@ -42,14 +75,14 @@ jobs:
             type=sha,prefix=compound-
 
       - name: Build and push
-        uses: useblacksmith/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: .
-          # Pin to the `production` stage. Upstream added a later `cloud` stage
-          # to the Dockerfile (used by their managed cloud image) and Docker's
-          # default target is the last stage — without this line the build
-          # silently retargets `cloud`, which needs setup we don't have and
-          # fails inside buildx at 22s with a bare `solver/jobs.go` pointer.
+          # Pin to the `production` stage. Upstream added a later `cloud`
+          # stage to the Dockerfile (used by their managed cloud image) and
+          # Docker's default target is the last stage — without this line
+          # the build silently retargets `cloud`, which needs setup we
+          # don't have.
           target: production
           platforms: linux/amd64
           push: true
