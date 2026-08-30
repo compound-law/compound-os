@@ -68,8 +68,18 @@ RUN pnpm --filter @paperclipai/plugin-sdk build
 # end of its stage. Empty for local `docker build`, which then writes no stamp.
 ARG PAPERCLIP_BUILD_COMMIT=""
 ENV NODE_OPTIONS=--max-old-space-size=4096
+# Bake in-tree plugins so their dist/manifest.js exists in the image.
+# Without this, plugin install via UI/API succeeds (manifest readable from source)
+# but loader fails at activation with "no manifest found" since dist/ is empty.
+# Plugins are filtered together so they share an SDK-build invocation cache.
+RUN pnpm \
+    --filter @paperclipai/plugin-workspace-diff \
+    --filter @paperclipai/plugin-llm-wiki \
+    build
 RUN pnpm --filter @paperclipai/server build
 RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-workspace-diff/dist/manifest.js || (echo "ERROR: plugin-workspace-diff build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-llm-wiki/dist/manifest.js || (echo "ERROR: plugin-llm-wiki build output missing" && exit 1)
 RUN rm -rf packages/paperclip-runner/runner/target
 
 FROM base AS production
@@ -93,17 +103,59 @@ WORKDIR /app
 # (the single most expensive layer: four CLI toolchains + apt, per arch) can
 # never hit the layer cache and rebuilds on every build.
 RUN echo "cli-tools-epoch: ${CLI_TOOLS_CACHE_EPOCH}" \
-  && npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest @moonshot-ai/kimi-code@latest \
+  && npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest @moonshot-ai/kimi-code@latest @googleworkspace/cli@latest \
   && apt-get update \
-  && apt-get install -y --no-install-recommends openssh-client jq \
+  && apt-get install -y --no-install-recommends openssh-client jq python3-httpx python3-reportlab \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
-COPY scripts/docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Install gcloud CLI (required by gws auth setup)
+RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --install-dir=/usr/local --disable-prompts \
+  && ln -sf /usr/local/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud \
+  && ln -sf /usr/local/google-cloud-sdk/bin/gsutil /usr/local/bin/gsutil
+
+# Install rtk binary for token-compression hooks (https://github.com/rtk-ai/rtk)
+ARG RTK_VERSION=v0.38.0
+RUN curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh \
+    | env RTK_VERSION="${RTK_VERSION}" RTK_INSTALL_DIR=/usr/local/bin sh \
+  && rtk --version
+
+# Bake RTK hook configs into a throwaway HOME so they survive the /paperclip volume mount.
+# rtk-seed.sh (called from entrypoint) merges these into $HOME on container boot.
+RUN mkdir -p /opt/rtk-defaults/.claude \
+  && HOME=/opt/rtk-defaults rtk init -g --auto-patch \
+  && HOME=/opt/rtk-defaults rtk init -g --opencode \
+  && HOME=/opt/rtk-defaults rtk init -g --codex \
+  && chown -R node:node /opt/rtk-defaults
+
+COPY scripts/docker-entrypoint.sh scripts/rtk-seed.sh scripts/dataforseo-claude-seed.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/rtk-seed.sh /usr/local/bin/dataforseo-claude-seed.sh
 
 COPY --chown=node:node --from=build /app /app
+
+# Bake the dataforseo-claude shared infra into a throwaway dir so it survives
+# the /paperclip volume mount. dataforseo-claude-seed.sh (called from entrypoint)
+# copies it into /paperclip/dataforseo-claude on container boot.
+#
+# Also bake the 13 sub-skill SKILL.md files into /opt/dataforseo-claude-skills/
+# and then REMOVE dataforseo-claude from /app/skills/. This is critical:
+# Paperclip's bundled-skill discovery flags every SKILL.md under /app/skills/ as
+# required=true on every agent (server/src/services/company-skills.ts:2183),
+# which prevents per-agent skill scoping via the sync API. By staging the
+# sub-skills outside /app/skills/, they become available for selective
+# per-company import (via the seed script) without forcing them onto every
+# agent in every company.
+#
+# Must run AFTER the `/app` copy above — upstream restructured the production
+# stage to install CLI tools BEFORE the app copy for layer cache reuse, so
+# anything that reads from /app/skills has to sit below the COPY line.
+RUN cp -R /app/skills/dataforseo-claude/seo /opt/dataforseo-claude-defaults \
+  && cp /app/skills/dataforseo-claude/requirements.txt /opt/dataforseo-claude-defaults/requirements.txt \
+  && chmod +x /opt/dataforseo-claude-defaults/scripts/*.py /opt/dataforseo-claude-defaults/scripts/preflight.sh \
+  && mkdir -p /opt/dataforseo-claude-skills \
+  && cp -R /app/skills/dataforseo-claude/skills/. /opt/dataforseo-claude-skills/ \
+  && rm -rf /app/skills/dataforseo-claude
 
 ENV NODE_ENV=production \
   HOME=/paperclip \

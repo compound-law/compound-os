@@ -177,14 +177,8 @@ export function getWorktreeUiBranding(env: NodeJS.ProcessEnv = process.env): Wor
   };
 }
 
-export function renderFaviconLinks(branding: WorktreeUiBranding): string {
-  if (!branding.enabled || !branding.faviconHref) return DEFAULT_FAVICON_LINKS;
-
-  const href = escapeHtmlAttribute(branding.faviconHref);
-  return [
-    `<link rel="icon" href="${href}" type="image/svg+xml" sizes="any" />`,
-    `<link rel="shortcut icon" href="${href}" type="image/svg+xml" />`,
-  ].join("\n");
+export function renderFaviconLinks(_branding: WorktreeUiBranding): string {
+  return DEFAULT_FAVICON_LINKS;
 }
 
 export function renderRuntimeBrandingMeta(branding: WorktreeUiBranding): string {
