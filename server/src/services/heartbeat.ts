@@ -18562,6 +18562,17 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       })();
       return queuedResponsibleUserIdPromise;
     };
+    // The resolvers above query through the shared pool (`db`), not the caller's
+    // transaction. Settle them before opening a transaction that awaits them: a
+    // transaction holding a pool connection while waiting for another one
+    // deadlocks the whole pool once enough wakes run concurrently. The memoized
+    // results (including a rejection) are replayed inside the transaction.
+    const settlePoolResolversBeforeTransaction = async (input: { priorSessionWorkspace: boolean }) => {
+      await resolveQueuedResponsibleUserId().catch(() => undefined);
+      if (input.priorSessionWorkspace) {
+        await resolveHasResolvablePriorSessionWorkspace().catch(() => undefined);
+      }
+    };
 
     const budgetBlock = await budgets.getInvocationBlock(agent.companyId, agentId, {
       issueId,
@@ -18668,6 +18679,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       // same issue workspace while the assignee already has a live run.
       const agentNameKey = normalizeAgentNameKey(agent.name);
 
+      await settlePoolResolversBeforeTransaction({ priorSessionWorkspace: isolatedWorkspacesEnabled });
       const outcome = await db.transaction(async (tx) => {
         await tx.execute(
           sql`select id from issues where id = ${issueId} and company_id = ${agent.companyId} for update`,
@@ -19556,6 +19568,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       return mergedRun;
     }
 
+    await settlePoolResolversBeforeTransaction({ priorSessionWorkspace: false });
     const queueOutcome = await db.transaction(async (tx) => {
       await tx.execute(
         sql`select id from agents where id = ${agentId} and company_id = ${agent.companyId} for update`,
